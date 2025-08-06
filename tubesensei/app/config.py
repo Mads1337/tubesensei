@@ -54,6 +54,32 @@ class Settings(BaseSettings):
         default="1.0.0",
         description="API version"
     )
+    
+    # YouTube API Configuration
+    YOUTUBE_API_KEY: str = Field(
+        default="",
+        description="YouTube Data API v3 key"
+    )
+    YOUTUBE_QUOTA_PER_DAY: int = Field(
+        default=10000,
+        description="YouTube API daily quota limit"
+    )
+    YOUTUBE_MAX_RESULTS_PER_PAGE: int = Field(
+        default=50,
+        description="Maximum results per YouTube API page"
+    )
+    YOUTUBE_REQUEST_TIMEOUT: int = Field(
+        default=30,
+        description="YouTube API request timeout in seconds"
+    )
+    RATE_LIMIT_REQUESTS_PER_MINUTE: int = Field(
+        default=60,
+        description="Rate limit for YouTube API requests per minute"
+    )
+    YOUTUBE_CACHE_TTL: int = Field(
+        default=86400,  # 24 hours
+        description="Cache TTL for YouTube metadata in seconds"
+    )
 
     class Config:
         env_file = ".env"
