@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import Field
-from typing import Optional
+from typing import Optional, List
 
 
 class Settings(BaseSettings):
@@ -79,6 +79,40 @@ class Settings(BaseSettings):
     YOUTUBE_CACHE_TTL: int = Field(
         default=86400,  # 24 hours
         description="Cache TTL for YouTube metadata in seconds"
+    )
+    
+    # Transcript Processing Configuration
+    TRANSCRIPT_TIMEOUT_SECONDS: int = Field(
+        default=300,
+        description="Timeout for transcript extraction in seconds"
+    )
+    TRANSCRIPT_MAX_RETRIES: int = Field(
+        default=3,
+        description="Maximum retries for failed transcript extractions"
+    )
+    TRANSCRIPT_PREFERRED_LANGUAGES: List[str] = Field(
+        default=["en", "en-US", "en-GB"],
+        description="Preferred languages for transcript extraction"
+    )
+    TRANSCRIPT_CACHE_TTL_HOURS: int = Field(
+        default=168,  # 7 days
+        description="Cache TTL for transcripts in hours"
+    )
+    MIN_TRANSCRIPT_WORD_COUNT: int = Field(
+        default=100,
+        description="Minimum word count for valid transcripts"
+    )
+    MAX_TRANSCRIPT_LENGTH: int = Field(
+        default=500000,
+        description="Maximum transcript length in characters"
+    )
+    TRANSCRIPT_BATCH_SIZE: int = Field(
+        default=10,
+        description="Batch size for concurrent transcript processing"
+    )
+    TRANSCRIPT_QUALITY_THRESHOLD: float = Field(
+        default=0.6,
+        description="Minimum quality score threshold for transcripts"
     )
 
     class Config:
