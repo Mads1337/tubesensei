@@ -115,6 +115,124 @@ class Settings(BaseSettings):
         description="Minimum quality score threshold for transcripts"
     )
 
+    # Celery Configuration
+    CELERY_BROKER_URL: str = Field(
+        default="redis://localhost:6379/0",
+        description="Celery broker URL (Redis)"
+    )
+    CELERY_RESULT_BACKEND: str = Field(
+        default="redis://localhost:6379/0",
+        description="Celery result backend URL"
+    )
+    CELERY_TASK_SERIALIZER: str = Field(
+        default="json",
+        description="Celery task serializer"
+    )
+    CELERY_RESULT_SERIALIZER: str = Field(
+        default="json",
+        description="Celery result serializer"
+    )
+    CELERY_ACCEPT_CONTENT: List[str] = Field(
+        default=["json"],
+        description="Accepted content types for Celery"
+    )
+    CELERY_TIMEZONE: str = Field(
+        default="UTC",
+        description="Celery timezone"
+    )
+    CELERY_ENABLE_UTC: bool = Field(
+        default=True,
+        description="Enable UTC for Celery"
+    )
+    CELERY_TASK_TRACK_STARTED: bool = Field(
+        default=True,
+        description="Track task start in Celery"
+    )
+    CELERY_TASK_TIME_LIMIT: int = Field(
+        default=1800,  # 30 minutes
+        description="Celery task time limit in seconds"
+    )
+    CELERY_TASK_SOFT_TIME_LIMIT: int = Field(
+        default=1500,  # 25 minutes
+        description="Celery task soft time limit in seconds"
+    )
+    CELERY_TASK_ACKS_LATE: bool = Field(
+        default=True,
+        description="Enable late acknowledgment for Celery tasks"
+    )
+    CELERY_WORKER_PREFETCH_MULTIPLIER: int = Field(
+        default=1,
+        description="Worker prefetch multiplier for Celery"
+    )
+    CELERY_WORKER_MAX_TASKS_PER_CHILD: int = Field(
+        default=1000,
+        description="Maximum tasks per worker child process"
+    )
+
+    # Job Queue Configuration
+    MAX_CONCURRENT_JOBS: int = Field(
+        default=10,
+        description="Maximum number of concurrent processing jobs"
+    )
+    MAX_VIDEOS_PER_BATCH: int = Field(
+        default=50,
+        description="Maximum number of videos per batch processing job"
+    )
+    WORKER_CONCURRENCY: int = Field(
+        default=4,
+        description="Number of worker processes to run concurrently"
+    )
+    JOB_RETRY_DELAY: int = Field(
+        default=60,
+        description="Delay between job retries in seconds"
+    )
+    JOB_MAX_RETRIES: int = Field(
+        default=3,
+        description="Maximum number of job retries"
+    )
+
+    # Monitoring Configuration
+    METRICS_ENABLED: bool = Field(
+        default=True,
+        description="Enable metrics collection"
+    )
+    METRICS_PORT: int = Field(
+        default=8001,
+        description="Port for metrics endpoint"
+    )
+    FLOWER_BASIC_AUTH: str = Field(
+        default="admin:admin",
+        description="Basic authentication for Flower monitoring"
+    )
+    PROMETHEUS_METRICS_PATH: str = Field(
+        default="/metrics",
+        description="Path for Prometheus metrics endpoint"
+    )
+
+    # Performance Configuration
+    DATABASE_QUERY_TIMEOUT: int = Field(
+        default=30,
+        description="Database query timeout in seconds"
+    )
+    SLOW_QUERY_THRESHOLD_MS: int = Field(
+        default=1000,
+        description="Threshold for slow query logging in milliseconds"
+    )
+    CACHE_DEFAULT_TTL: int = Field(
+        default=3600,  # 1 hour
+        description="Default cache TTL in seconds"
+    )
+
+    # Health Check Configuration
+    HEALTH_CHECK_TIMEOUT: int = Field(
+        default=30,
+        description="Health check timeout in seconds"
+    )
+    HEALTH_CHECK_INTERVAL: int = Field(
+        default=60,
+        description="Health check interval in seconds"
+    )
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
