@@ -155,8 +155,8 @@ class ProcessingSessionFactory(factory.Factory):
         model = ProcessingSession
     
     name = factory.Faker("sentence", nb_words=3)
-    session_type = SessionType.CHANNEL_DISCOVERY
-    status = SessionStatus.PENDING
+    session_type = SessionType.CHANNEL_SYNC
+    status = SessionStatus.INITIALIZED
     total_jobs = 0
     completed_jobs = 0
     failed_jobs = 0

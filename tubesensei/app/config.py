@@ -246,6 +246,14 @@ class Settings(BaseSettings):
         default="",
         description="Google API key for Gemini models (optional)"
     )
+    GEMINI_API_KEY: str = Field(
+        default="",
+        description="Gemini API key (same as GOOGLE_API_KEY for compatibility)"
+    )
+    SERPER_API_KEY: str = Field(
+        default="",
+        description="Serper API key for web search (optional)"
+    )
     DEEPSEEK_API_KEY: str = Field(
         default="",
         description="DeepSeek API key for DeepSeek models (optional)"

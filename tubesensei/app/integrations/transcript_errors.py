@@ -5,16 +5,15 @@ from youtube_transcript_api._errors import (
     NoTranscriptFound,
     VideoUnavailable,
     TooManyRequests,
-    TranscriptListFetchError,
     NoTranscriptAvailable
 )
 
-from ..utils.exceptions import BaseAPIError
+from ..utils.exceptions import YouTubeAPIError
 
 logger = logging.getLogger(__name__)
 
 
-class TranscriptError(BaseAPIError):
+class TranscriptError(YouTubeAPIError):
     """Base exception for transcript-related errors."""
     
     def __init__(
@@ -25,10 +24,11 @@ class TranscriptError(BaseAPIError):
         retry_after: Optional[int] = None,
         original_error: Optional[Exception] = None
     ):
-        super().__init__(message, original_error=original_error)
+        super().__init__(message)
         self.video_id = video_id
         self.language = language
         self.retry_after = retry_after
+        self.original_error = original_error
         
     def to_dict(self) -> Dict[str, Any]:
         """Convert error to dictionary for logging/storage."""
@@ -221,15 +221,6 @@ async def handle_transcript_error(
         return TranscriptRateLimitError(
             video_id=video_id,
             retry_after=retry_after,
-            original_error=error
-        )
-    
-    elif isinstance(error, TranscriptListFetchError):
-        logger.error(f"Failed to fetch transcript list for video {video_id}: {error}")
-        return TranscriptProcessingError(
-            video_id=video_id,
-            stage="list_fetch",
-            details=str(error),
             original_error=error
         )
     

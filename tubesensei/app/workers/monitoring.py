@@ -3,7 +3,7 @@ Task monitoring and metrics collection for TubeSensei workers
 """
 import time
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from threading import Lock
 from collections import defaultdict, deque

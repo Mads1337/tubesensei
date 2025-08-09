@@ -29,7 +29,7 @@ html2text==2020.1.16
 regex==2023.10.3
 
 # Caching
-redis==5.0.1
+redis==4.6.0
 
 # Job Queue & Monitoring
 celery[redis]==5.3.4
@@ -42,7 +42,7 @@ structlog==23.2.0
 
 # AI/LLM Integration
 litellm==1.46.0
-openai==1.40.0
+openai==1.45.0
 anthropic==0.31.0
 google-generativeai==0.7.2
 tiktoken==0.7.0

@@ -3,10 +3,10 @@ Celery tasks for TubeSensei processing pipeline
 """
 import logging
 import asyncio
-from typing import List, UUID, Dict, Any, Optional
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from celery import Task
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 from app.celery_app import celery_app, update_job_status
 from app.config import settings
