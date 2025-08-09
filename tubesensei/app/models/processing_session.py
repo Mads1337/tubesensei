@@ -108,7 +108,7 @@ class ProcessingSession(BaseModel):
         default=dict
     )
     
-    metadata = Column(
+    session_metadata = Column(
         JSONB,
         nullable=False,
         default=dict

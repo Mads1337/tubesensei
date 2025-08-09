@@ -40,6 +40,16 @@ prometheus-client==0.19.0
 # Structured Logging
 structlog==23.2.0
 
+# AI/LLM Integration
+litellm==1.46.0
+openai==1.40.0
+anthropic==0.31.0
+google-generativeai==0.7.2
+tiktoken==0.7.0
+langchain==0.2.5
+langchain-community==0.2.5
+aioredis==2.0.1
+
 # Testing
 pytest-cov==4.1.0
 pytest-mock==3.12.0

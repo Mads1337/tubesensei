@@ -83,7 +83,7 @@ class Transcript(BaseModel):
         nullable=True
     )
     
-    metadata = Column(
+    transcript_metadata = Column(
         JSONB,
         nullable=False,
         default=dict

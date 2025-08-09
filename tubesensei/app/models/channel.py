@@ -106,7 +106,7 @@ class Channel(BaseModel):
         nullable=True
     )
     
-    metadata = Column(
+    channel_metadata = Column(
         JSONB,
         nullable=False,
         default=dict

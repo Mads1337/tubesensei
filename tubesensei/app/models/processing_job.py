@@ -141,7 +141,7 @@ class ProcessingJob(BaseModel):
         nullable=True
     )
     
-    metadata = Column(
+    job_metadata = Column(
         JSONB,
         nullable=False,
         default=dict

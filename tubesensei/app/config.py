@@ -5,7 +5,7 @@ from typing import Optional, List
 
 class Settings(BaseSettings):
     DATABASE_URL: str = Field(
-        default="postgresql+asyncpg://tubesensei:tubesensei_dev@localhost:5433/tubesensei",
+        default="postgresql+asyncpg://bazaar_user:bazaar_pass@localhost:5433/tubesensei",
         description="PostgreSQL database connection URL with asyncpg driver"
     )
     DATABASE_POOL_SIZE: int = Field(
@@ -231,6 +231,40 @@ class Settings(BaseSettings):
     HEALTH_CHECK_INTERVAL: int = Field(
         default=60,
         description="Health check interval in seconds"
+    )
+
+    # LLM Configuration
+    OPENAI_API_KEY: str = Field(
+        default="",
+        description="OpenAI API key for GPT models"
+    )
+    ANTHROPIC_API_KEY: str = Field(
+        default="",
+        description="Anthropic API key for Claude models"
+    )
+    GOOGLE_API_KEY: str = Field(
+        default="",
+        description="Google API key for Gemini models (optional)"
+    )
+    DEEPSEEK_API_KEY: str = Field(
+        default="",
+        description="DeepSeek API key for DeepSeek models (optional)"
+    )
+    LLM_CACHE_TTL: int = Field(
+        default=86400,  # 24 hours
+        description="Cache TTL for LLM responses in seconds"
+    )
+    LLM_MAX_RETRIES: int = Field(
+        default=3,
+        description="Maximum retries for failed LLM requests"
+    )
+    LLM_DEFAULT_TEMPERATURE: float = Field(
+        default=0.7,
+        description="Default temperature for LLM generation"
+    )
+    LLM_COST_TRACKING_ENABLED: bool = Field(
+        default=True,
+        description="Enable cost tracking for LLM usage"
     )
 
     class Config:

@@ -52,10 +52,10 @@ pytest_plugins = [
 def pytest_configure(config):
     """Configure pytest with custom markers."""
     config.addinivalue_line(
-        "markers", "integration: marks tests as integration tests (deselect with '-m "not integration"')"
+        "markers", "integration: marks tests as integration tests (deselect with '-m \"not integration\"')"
     )
     config.addinivalue_line(
-        "markers", "performance: marks tests as performance tests (deselect with '-m "not performance"')"
+        "markers", "performance: marks tests as performance tests (deselect with '-m \"not performance\"')"
     )
     config.addinivalue_line(
         "markers", "slow: marks tests as slow running"

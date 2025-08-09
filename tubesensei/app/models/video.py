@@ -138,7 +138,7 @@ class Video(BaseModel):
         default=list
     )
     
-    metadata = Column(
+    video_metadata = Column(
         JSONB,
         nullable=False,
         default=dict

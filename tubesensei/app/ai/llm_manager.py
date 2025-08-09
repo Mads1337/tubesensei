@@ -1,0 +1,511 @@
+"""
+LLM Manager for TubeSensei - Phase 2A Core Module
+
+This module provides a unified interface for managing multiple LLM providers
+through LiteLLM, with automatic fallback, cost tracking, and model selection.
+"""
+
+import asyncio
+import time
+import logging
+import json
+import hashlib
+from dataclasses import dataclass
+from enum import Enum
+from typing import Dict, List, Optional, Any
+from decimal import Decimal
+
+try:
+    import redis.asyncio as aioredis
+except ImportError:
+    try:
+        import aioredis
+    except ImportError:
+        aioredis = None
+
+from litellm import Router, completion
+import litellm
+
+from tubesensei.app.config import settings
+
+
+logger = logging.getLogger(__name__)
+
+# Cost tracking per 1K tokens (approximate values)
+MODEL_COSTS = {
+    "gpt-4": {"input": 0.03, "output": 0.06},
+    "gpt-4-turbo": {"input": 0.01, "output": 0.03},
+    "gpt-3.5-turbo": {"input": 0.0015, "output": 0.002},
+    "claude-3-opus-20240229": {"input": 0.015, "output": 0.075},
+    "claude-3-sonnet-20240229": {"input": 0.003, "output": 0.015},
+    "claude-3-haiku-20240307": {"input": 0.00025, "output": 0.00125},
+    "gemini-pro": {"input": 0.0005, "output": 0.0015},
+    "gemini-pro-vision": {"input": 0.0005, "output": 0.0015},
+    "deepseek-chat": {"input": 0.00014, "output": 0.00028},
+}
+
+
+class ModelType(Enum):
+    """Model types for different use cases."""
+    FAST = "fast"           # Quick, cheap operations
+    BALANCED = "balanced"   # Moderate quality/cost
+    QUALITY = "quality"     # High-quality responses
+
+
+@dataclass
+class LLMResponse:
+    """Response from an LLM completion request."""
+    content: str
+    model: str
+    provider: str
+    tokens_used: int
+    cost: float
+    processing_time: float
+    cached: bool = False
+
+
+class LLMManager:
+    """
+    Unified LLM manager with multi-provider support, fallback, and cost tracking.
+    """
+    
+    # Model configuration for different types
+    MODEL_CONFIG: Dict[ModelType, List[str]] = {
+        ModelType.FAST: [
+            "gpt-3.5-turbo",
+            "claude-3-haiku-20240307", 
+            "gemini-pro",
+            "deepseek-chat"
+        ],
+        ModelType.BALANCED: [
+            "gpt-4-turbo",
+            "claude-3-sonnet-20240229",
+            "gpt-4",
+            "gemini-pro"
+        ],
+        ModelType.QUALITY: [
+            "gpt-4",
+            "claude-3-opus-20240229",
+            "gpt-4-turbo",
+            "claude-3-sonnet-20240229"
+        ]
+    }
+    
+    def __init__(self):
+        """Initialize the LLM Manager."""
+        self.router: Optional[Router] = None
+        self.redis_client: Optional[aioredis.Redis] = None
+        self.total_cost = Decimal('0.00')
+        self.request_count = 0
+        self.cost_by_model: Dict[str, Decimal] = {}
+        self.cost_by_provider: Dict[str, Decimal] = {}
+        
+        # Configure litellm logging
+        litellm.set_verbose = settings.DEBUG
+        
+        self._setup_router()
+    
+    def _setup_router(self) -> None:
+        """Configure LiteLLM router with multiple providers."""
+        try:
+            # Build model list for router
+            model_list = []
+            
+            # OpenAI models
+            if settings.OPENAI_API_KEY:
+                openai_models = [
+                    "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"
+                ]
+                for model in openai_models:
+                    model_list.append({
+                        "model_name": model,
+                        "litellm_params": {
+                            "model": model,
+                            "api_key": settings.OPENAI_API_KEY
+                        }
+                    })
+            
+            # Anthropic models
+            if settings.ANTHROPIC_API_KEY:
+                anthropic_models = [
+                    "claude-3-opus-20240229",
+                    "claude-3-sonnet-20240229", 
+                    "claude-3-haiku-20240307"
+                ]
+                for model in anthropic_models:
+                    model_list.append({
+                        "model_name": model,
+                        "litellm_params": {
+                            "model": model,
+                            "api_key": settings.ANTHROPIC_API_KEY
+                        }
+                    })
+            
+            # Google models (optional)
+            if settings.GOOGLE_API_KEY:
+                google_models = ["gemini-pro", "gemini-pro-vision"]
+                for model in google_models:
+                    model_list.append({
+                        "model_name": model,
+                        "litellm_params": {
+                            "model": model,
+                            "api_key": settings.GOOGLE_API_KEY
+                        }
+                    })
+            
+            # DeepSeek models (optional)
+            if settings.DEEPSEEK_API_KEY:
+                model_list.append({
+                    "model_name": "deepseek-chat",
+                    "litellm_params": {
+                        "model": "deepseek/deepseek-chat",
+                        "api_key": settings.DEEPSEEK_API_KEY
+                    }
+                })
+            
+            if not model_list:
+                logger.warning("No LLM API keys configured")
+                return
+            
+            # Initialize router with fallbacks
+            self.router = Router(
+                model_list=model_list,
+                fallbacks=[
+                    {"gpt-4": ["gpt-4-turbo", "claude-3-sonnet-20240229"]},
+                    {"claude-3-opus-20240229": ["gpt-4", "claude-3-sonnet-20240229"]},
+                    {"gpt-3.5-turbo": ["claude-3-haiku-20240307", "gemini-pro"]},
+                ]
+            )
+            
+            logger.info(f"LLM router configured with {len(model_list)} models")
+            
+        except Exception as e:
+            logger.error(f"Failed to setup LLM router: {e}")
+            raise
+    
+    async def initialize(self) -> None:
+        """Initialize Redis connection for caching."""
+        if aioredis is None:
+            logger.warning("Redis not available - caching disabled")
+            return
+            
+        try:
+            self.redis_client = aioredis.from_url(
+                settings.REDIS_URL,
+                encoding="utf-8",
+                decode_responses=True
+            )
+            # Test connection
+            await self.redis_client.ping()
+            logger.info("Redis client initialized for LLM caching")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize Redis client: {e}")
+            # Don't raise - caching is optional
+    
+    def _generate_cache_key(
+        self, 
+        messages: List[Dict[str, str]], 
+        model_type: str,
+        temperature: float,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> str:
+        """
+        Generate unique cache key using hashlib for prompt+model+system_prompt.
+        
+        Args:
+            messages: List of message dicts
+            model_type: Model type string
+            temperature: Generation temperature
+            max_tokens: Maximum tokens to generate
+            **kwargs: Additional parameters
+            
+        Returns:
+            SHA256 hash as cache key
+        """
+        # Create deterministic string from all parameters
+        cache_data = {
+            "messages": messages,
+            "model_type": model_type,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "kwargs": sorted(kwargs.items())  # Sort for consistency
+        }
+        
+        # Convert to JSON string for consistent hashing
+        cache_string = json.dumps(cache_data, sort_keys=True, separators=(',', ':'))
+        
+        # Generate SHA256 hash
+        hash_obj = hashlib.sha256(cache_string.encode('utf-8'))
+        return f"llm_cache:{hash_obj.hexdigest()}"
+    
+    async def _get_cached_response(self, cache_key: str) -> Optional[LLMResponse]:
+        """
+        Retrieve cached response from Redis.
+        
+        Args:
+            cache_key: Redis cache key
+            
+        Returns:
+            Cached LLMResponse or None if not found
+        """
+        if not self.redis_client:
+            return None
+            
+        try:
+            cached_data = await self.redis_client.get(cache_key)
+            if not cached_data:
+                return None
+            
+            # Deserialize cached response
+            response_data = json.loads(cached_data)
+            
+            # Reconstruct LLMResponse with cached=True
+            return LLMResponse(
+                content=response_data['content'],
+                model=response_data['model'],
+                provider=response_data['provider'],
+                tokens_used=response_data['tokens_used'],
+                cost=response_data['cost'],
+                processing_time=response_data['processing_time'],
+                cached=True
+            )
+            
+        except Exception as e:
+            logger.warning(f"Failed to retrieve cached response: {e}")
+            return None
+    
+    async def _cache_response(self, cache_key: str, response: LLMResponse) -> None:
+        """
+        Store response in Redis with TTL.
+        
+        Args:
+            cache_key: Redis cache key
+            response: LLMResponse to cache
+        """
+        if not self.redis_client:
+            return
+            
+        try:
+            # Serialize response data (excluding cached flag)
+            response_data = {
+                'content': response.content,
+                'model': response.model,
+                'provider': response.provider,
+                'tokens_used': response.tokens_used,
+                'cost': response.cost,
+                'processing_time': response.processing_time
+            }
+            
+            # Store in Redis with TTL
+            await self.redis_client.setex(
+                cache_key,
+                settings.LLM_CACHE_TTL,
+                json.dumps(response_data)
+            )
+            
+            logger.debug(f"Cached LLM response with key: {cache_key}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to cache response: {e}")
+            # Don't raise - caching failures shouldn't break the flow
+    
+    async def complete(
+        self,
+        messages: List[Dict[str, str]],
+        model_type: ModelType = ModelType.BALANCED,
+        temperature: float = None,
+        max_tokens: int = None,
+        use_cache: bool = True,
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Get LLM completion with automatic model selection and fallback.
+        
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            model_type: Type of model to use (fast/balanced/quality)
+            temperature: Generation temperature (default from config)
+            max_tokens: Maximum tokens to generate
+            use_cache: Whether to use Redis caching (default: True)
+            **kwargs: Additional LiteLLM parameters
+            
+        Returns:
+            LLMResponse with completion data
+        """
+        if not self.router:
+            raise RuntimeError("LLM router not initialized - no API keys configured")
+        
+        # Set defaults
+        if temperature is None:
+            temperature = settings.LLM_DEFAULT_TEMPERATURE
+        
+        # Check cache first if enabled
+        cache_key = None
+        if use_cache:
+            cache_key = self._generate_cache_key(
+                messages=messages,
+                model_type=model_type.value,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **kwargs
+            )
+            
+            cached_response = await self._get_cached_response(cache_key)
+            if cached_response:
+                logger.info(f"Cache hit for LLM request: {cached_response.model}")
+                return cached_response
+        
+        # Get model list for the requested type
+        available_models = self.MODEL_CONFIG.get(model_type, [])
+        if not available_models:
+            raise ValueError(f"No models configured for type: {model_type}")
+        
+        # Prepare completion parameters
+        completion_params = {
+            "messages": messages,
+            "temperature": temperature,
+            **kwargs
+        }
+        
+        if max_tokens:
+            completion_params["max_tokens"] = max_tokens
+        
+        start_time = time.time()
+        last_exception = None
+        
+        # Try models in order with fallback
+        for model in available_models:
+            try:
+                logger.debug(f"Attempting completion with model: {model}")
+                
+                response = await asyncio.to_thread(
+                    completion,
+                    model=model,
+                    **completion_params
+                )
+                
+                processing_time = time.time() - start_time
+                
+                # Extract response data
+                content = response.choices[0].message.content
+                tokens_used = response.usage.total_tokens if response.usage else 0
+                
+                # Calculate cost
+                cost = self._calculate_cost(model, response.usage) if response.usage else 0.0
+                
+                # Get provider
+                provider = self._get_provider(model)
+                
+                # Track cost
+                self._track_cost(model, provider, cost)
+                
+                llm_response = LLMResponse(
+                    content=content,
+                    model=model,
+                    provider=provider,
+                    tokens_used=tokens_used,
+                    cost=cost,
+                    processing_time=processing_time,
+                    cached=False
+                )
+                
+                logger.info(
+                    f"LLM completion successful: {model} | "
+                    f"tokens={tokens_used} | cost=${cost:.4f} | "
+                    f"time={processing_time:.2f}s"
+                )
+                
+                # Cache successful response if caching is enabled
+                if use_cache and cache_key:
+                    await self._cache_response(cache_key, llm_response)
+                
+                return llm_response
+                
+            except Exception as e:
+                last_exception = e
+                logger.warning(f"Model {model} failed: {e}")
+                continue
+        
+        # All models failed
+        raise RuntimeError(
+            f"All models failed for type {model_type}. "
+            f"Last error: {last_exception}"
+        )
+    
+    def _calculate_cost(self, model: str, usage: Any) -> float:
+        """Calculate cost for the completion."""
+        if not usage or not settings.LLM_COST_TRACKING_ENABLED:
+            return 0.0
+        
+        try:
+            model_cost = MODEL_COSTS.get(model, {"input": 0.001, "output": 0.002})
+            
+            input_tokens = getattr(usage, 'prompt_tokens', 0)
+            output_tokens = getattr(usage, 'completion_tokens', 0)
+            
+            input_cost = (input_tokens / 1000) * model_cost["input"]
+            output_cost = (output_tokens / 1000) * model_cost["output"]
+            
+            return round(input_cost + output_cost, 6)
+            
+        except Exception as e:
+            logger.warning(f"Failed to calculate cost for {model}: {e}")
+            return 0.0
+    
+    def _get_provider(self, model: str) -> str:
+        """Extract provider name from model."""
+        if model.startswith("gpt-"):
+            return "openai"
+        elif model.startswith("claude-"):
+            return "anthropic"
+        elif model.startswith("gemini-"):
+            return "google"
+        elif model.startswith("deepseek"):
+            return "deepseek"
+        else:
+            return "unknown"
+    
+    def _track_cost(self, model: str, provider: str, cost: float) -> None:
+        """Track cumulative costs by model and provider."""
+        if not settings.LLM_COST_TRACKING_ENABLED or cost == 0:
+            return
+        
+        cost_decimal = Decimal(str(cost))
+        
+        # Track total cost
+        self.total_cost += cost_decimal
+        self.request_count += 1
+        
+        # Track by model
+        if model not in self.cost_by_model:
+            self.cost_by_model[model] = Decimal('0.00')
+        self.cost_by_model[model] += cost_decimal
+        
+        # Track by provider
+        if provider not in self.cost_by_provider:
+            self.cost_by_provider[provider] = Decimal('0.00')
+        self.cost_by_provider[provider] += cost_decimal
+    
+    def get_cost_report(self) -> Dict[str, Any]:
+        """Get comprehensive cost report."""
+        return {
+            "total_cost": float(self.total_cost),
+            "total_requests": self.request_count,
+            "average_cost_per_request": float(
+                self.total_cost / self.request_count if self.request_count > 0 else 0
+            ),
+            "cost_by_model": {
+                model: float(cost) for model, cost in self.cost_by_model.items()
+            },
+            "cost_by_provider": {
+                provider: float(cost) for provider, cost in self.cost_by_provider.items()
+            }
+        }
+    
+    async def close(self) -> None:
+        """Clean up resources."""
+        if self.redis_client:
+            await self.redis_client.close()
+            logger.info("Redis client closed")
