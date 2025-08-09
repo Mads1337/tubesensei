@@ -275,6 +275,28 @@ class Settings(BaseSettings):
         description="Enable cost tracking for LLM usage"
     )
 
+    # Retry Strategy Configuration
+    INITIAL_DELAY: float = Field(
+        default=1.0,
+        description="Initial delay between retries in seconds"
+    )
+    MAX_DELAY: float = Field(
+        default=60.0,
+        description="Maximum delay between retries in seconds"
+    )
+    BACKOFF_MULTIPLIER: float = Field(
+        default=2.0,
+        description="Exponential backoff multiplier for retry delays"
+    )
+    CIRCUIT_BREAKER_THRESHOLD: int = Field(
+        default=5,
+        description="Number of failures before opening circuit breaker"
+    )
+    CIRCUIT_BREAKER_TIMEOUT: int = Field(
+        default=300,
+        description="Time in seconds to wait before trying failed provider again"
+    )
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

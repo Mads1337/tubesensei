@@ -15,6 +15,7 @@ class VideoStatus(enum.Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     SKIPPED = "skipped"
+    FILTERED_OUT = "filtered_out"
 
 
 class Video(BaseModel):

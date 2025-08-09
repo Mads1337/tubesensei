@@ -27,6 +27,7 @@ from litellm import Router, completion
 import litellm
 
 from tubesensei.app.config import settings
+from tubesensei.app.ai.retry_strategy import RetryStrategy
 
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,9 @@ class LLMManager:
         self.request_count = 0
         self.cost_by_model: Dict[str, Decimal] = {}
         self.cost_by_provider: Dict[str, Decimal] = {}
+        
+        # Initialize retry strategy
+        self.retry_strategy = RetryStrategy()
         
         # Configure litellm logging
         litellm.set_verbose = settings.DEBUG
@@ -362,6 +366,21 @@ class LLMManager:
         if not available_models:
             raise ValueError(f"No models configured for type: {model_type}")
         
+        # Filter out models with open circuit breakers
+        providers = [self._get_provider(model) for model in available_models]
+        available_providers = self.retry_strategy.get_available_providers(providers)
+        
+        # Filter models by available providers
+        filtered_models = [
+            model for model in available_models 
+            if self._get_provider(model) in available_providers
+        ]
+        
+        if not filtered_models:
+            # If all circuits are open, try one model anyway (circuit may have timeout expired)
+            logger.warning("All provider circuits are open, trying first model anyway")
+            filtered_models = [available_models[0]]
+        
         # Prepare completion parameters
         completion_params = {
             "messages": messages,
@@ -375,15 +394,33 @@ class LLMManager:
         start_time = time.time()
         last_exception = None
         
-        # Try models in order with fallback
-        for model in available_models:
+        # Try models in order with retry strategy
+        for model in filtered_models:
+            provider = self._get_provider(model)
+            
+            # Skip if circuit is still open for this provider
+            if self.retry_strategy.is_circuit_open(provider):
+                logger.warning(f"Skipping model {model} - circuit breaker open for provider {provider}")
+                continue
+            
             try:
                 logger.debug(f"Attempting completion with model: {model}")
                 
-                response = await asyncio.to_thread(
-                    completion,
-                    model=model,
-                    **completion_params
+                # Create retry context for this model/provider
+                retry_context = self.retry_strategy.create_retry_context(provider=provider, model=model)
+                
+                # Define the operation to retry
+                async def completion_operation():
+                    return await asyncio.to_thread(
+                        completion,
+                        model=model,
+                        **completion_params
+                    )
+                
+                # Execute with retry strategy
+                response = await self.retry_strategy.execute_with_retry(
+                    completion_operation,
+                    retry_context
                 )
                 
                 processing_time = time.time() - start_time
@@ -394,9 +431,6 @@ class LLMManager:
                 
                 # Calculate cost
                 cost = self._calculate_cost(model, response.usage) if response.usage else 0.0
-                
-                # Get provider
-                provider = self._get_provider(model)
                 
                 # Track cost
                 self._track_cost(model, provider, cost)
@@ -425,7 +459,7 @@ class LLMManager:
                 
             except Exception as e:
                 last_exception = e
-                logger.warning(f"Model {model} failed: {e}")
+                logger.warning(f"Model {model} failed after retries: {e}")
                 continue
         
         # All models failed
@@ -501,8 +535,31 @@ class LLMManager:
             },
             "cost_by_provider": {
                 provider: float(cost) for provider, cost in self.cost_by_provider.items()
+            },
+            "circuit_breaker_status": self.retry_strategy.get_circuit_breaker_status()
+        }
+    
+    def get_retry_strategy_status(self) -> Dict[str, Any]:
+        """Get retry strategy and circuit breaker status."""
+        return {
+            "circuit_breakers": self.retry_strategy.get_circuit_breaker_status(),
+            "config": {
+                "max_retries": self.retry_strategy.max_retries,
+                "initial_delay": self.retry_strategy.initial_delay,
+                "max_delay": self.retry_strategy.max_delay,
+                "backoff_multiplier": self.retry_strategy.backoff_multiplier,
+                "circuit_breaker_threshold": self.retry_strategy.circuit_breaker_threshold,
+                "circuit_breaker_timeout": self.retry_strategy.circuit_breaker_timeout
             }
         }
+    
+    def reset_circuit_breaker(self, provider: str) -> None:
+        """Reset circuit breaker for a specific provider."""
+        self.retry_strategy.reset_circuit_breaker(provider)
+    
+    def reset_all_circuit_breakers(self) -> None:
+        """Reset all circuit breakers."""
+        self.retry_strategy.reset_all_circuit_breakers()
     
     async def close(self) -> None:
         """Clean up resources."""
