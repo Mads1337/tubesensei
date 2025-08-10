@@ -4,6 +4,7 @@ from app.models.video import Video, VideoStatus
 from app.models.transcript import Transcript, TranscriptSource, TranscriptLanguage
 from app.models.processing_job import ProcessingJob, JobType, JobStatus, JobPriority
 from app.models.processing_session import ProcessingSession, SessionType, SessionStatus
+from app.models.user import User, UserRole, UserStatus
 
 __all__ = [
     "BaseModel",
@@ -21,4 +22,7 @@ __all__ = [
     "ProcessingSession",
     "SessionType",
     "SessionStatus",
+    "User",
+    "UserRole",
+    "UserStatus",
 ]
