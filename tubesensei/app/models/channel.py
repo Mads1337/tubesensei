@@ -24,13 +24,18 @@ class Channel(BaseModel):
         index=True
     )
     
-    channel_name = Column(
+    name = Column(
         String(255),
         nullable=False
     )
     
     channel_handle = Column(
         String(255),
+        nullable=True
+    )
+    
+    channel_url = Column(
+        String(500),
         nullable=True
     )
     
@@ -148,7 +153,7 @@ class Channel(BaseModel):
     )
     
     def __repr__(self) -> str:
-        return f"<Channel(id={self.id}, name={self.channel_name}, handle={self.channel_handle})>"
+        return f"<Channel(id={self.id}, name={self.name}, handle={self.channel_handle})>"
     
     @property
     def is_active(self) -> bool:

@@ -175,6 +175,13 @@ class Video(BaseModel):
         lazy="dynamic"
     )
     
+    ideas = relationship(
+        "Idea",
+        back_populates="video",
+        cascade="all, delete-orphan",
+        lazy="dynamic"
+    )
+    
     __table_args__ = (
         Index("idx_video_channel_status", "channel_id", "status"),
         Index("idx_video_status_discovered", "status", "discovered_at"),
