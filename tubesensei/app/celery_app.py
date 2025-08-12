@@ -51,13 +51,13 @@ def create_celery_app() -> Celery:
     # Rate limits for different task types
     celery_app.conf.task_annotations = {
         "app.workers.processing_tasks.extract_transcript_task": {
-            "rate_limit": "30/m"  # 30 per minute to respect API limits
+            "rate_limit": "10/m"  # 10 per minute - very conservative
         },
         "app.workers.processing_tasks.discover_channel_videos_task": {
-            "rate_limit": "10/m"  # 10 per minute for discovery
+            "rate_limit": "3/m"  # 3 per minute for discovery
         },
         "app.workers.processing_tasks.sync_channel_metadata_task": {
-            "rate_limit": "20/m"  # 20 per minute for metadata sync
+            "rate_limit": "5/m"  # 5 per minute for metadata sync
         },
     }
     

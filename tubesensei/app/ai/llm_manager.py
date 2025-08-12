@@ -32,17 +32,33 @@ from tubesensei.app.ai.retry_strategy import RetryStrategy
 
 logger = logging.getLogger(__name__)
 
-# Cost tracking per 1K tokens (approximate values)
+# Cost tracking per 1M tokens (2025 pricing from llm-price.com)
 MODEL_COSTS = {
-    "gpt-4": {"input": 0.03, "output": 0.06},
-    "gpt-4-turbo": {"input": 0.01, "output": 0.03},
-    "gpt-3.5-turbo": {"input": 0.0015, "output": 0.002},
-    "claude-3-opus-20240229": {"input": 0.015, "output": 0.075},
-    "claude-3-sonnet-20240229": {"input": 0.003, "output": 0.015},
-    "claude-3-haiku-20240307": {"input": 0.00025, "output": 0.00125},
-    "gemini-pro": {"input": 0.0005, "output": 0.0015},
-    "gemini-pro-vision": {"input": 0.0005, "output": 0.0015},
-    "deepseek-chat": {"input": 0.00014, "output": 0.00028},
+    # OpenAI GPT-5 Models Only
+    "gpt-5": {"input": 1.25, "output": 10.0},  # Premium flagship model
+    "gpt-5-mini": {"input": 0.25, "output": 2.0},  # Mid-tier GPT-5
+    "gpt-5-nano": {"input": 0.05, "output": 0.4},  # Fast GPT-5
+    
+    # Anthropic Models (2025)
+    "claude-opus-4.1": {"input": 15.0, "output": 75.0},  # Most capable
+    "claude-sonnet-4": {"input": 3.0, "output": 15.0},  # High performance
+    "claude-3.7-sonnet": {"input": 3.0, "output": 15.0},  # Hybrid reasoning
+    "claude-3.5-sonnet-20241022": {"input": 3.0, "output": 15.0},  # Latest 3.5
+    "claude-3.5-haiku-20241022": {"input": 0.8, "output": 4.0},  # Fast and cheap
+    
+    # Google Models (2025)
+    "gemini-2.5-pro": {"input": 1.25, "output": 10.0},  # Gemini 2.5 Pro
+    "gemini-2.5-flash": {"input": 0.3, "output": 2.5},  # Best price/performance
+    "gemini-2.5-flash-lite": {"input": 0.1, "output": 0.4},  # Lowest cost
+    "gemini-2.0-flash": {"input": 0.1, "output": 0.4},  # Production ready
+    "gemini-2.0-flash-lite": {"input": 0.075, "output": 0.3},  # Ultra fast
+    
+    # DeepSeek Models
+    "deepseek-chat": {"input": 0.18, "output": 0.72},  # DeepSeek R1
+    "deepseek-v3": {"input": 0.18, "output": 0.72},  # DeepSeek V3
+    
+    # Other Models
+    "qwen-2.5-coder-32b": {"input": 0.05, "output": 0.2},  # Qwen Coder
 }
 
 
@@ -70,25 +86,28 @@ class LLMManager:
     Unified LLM manager with multi-provider support, fallback, and cost tracking.
     """
     
-    # Model configuration for different types
+    # Model configuration ordered by cost efficiency (cheapest first) - 2025
     MODEL_CONFIG: Dict[ModelType, List[str]] = {
         ModelType.FAST: [
-            "gpt-3.5-turbo",
-            "claude-3-haiku-20240307", 
-            "gemini-pro",
-            "deepseek-chat"
+            "gpt-5-nano",
+            "gemini-2.0-flash-lite",     # $0.125 avg - Ultra fast & cheapest
+            "deepseek-chat",             # $0.21 avg - Budget option
+            "gemini-2.5-flash-lite",     # $0.25 avg - Low cost Gemini
+            "claude-3.5-haiku-20241022", # $2.4 avg - Latest Haiku
         ],
         ModelType.BALANCED: [
-            "gpt-4-turbo",
-            "claude-3-sonnet-20240229",
-            "gpt-4",
-            "gemini-pro"
+            "deepseek-chat",
+            "gpt-5-mini",
+            "gemini-2.5-flash",          # $0.25 avg - Best price/performance
+            "gemini-2.0-flash",          # $0.25 avg - Production ready
+            "claude-sonnet-4",           # $9.0 avg - High performance Claude 4
         ],
         ModelType.QUALITY: [
-            "gpt-4",
-            "claude-3-opus-20240229",
-            "gpt-4-turbo",
-            "claude-3-sonnet-20240229"
+            "gpt-5-mini",
+            "deepseek-chat",
+            "gemini-2.5-pro",            # $5.6 avg - Gemini Pro
+            "claude-sonnet-4",           # $9.0 avg - High performance reasoning
+            "gpt-5",                     # $5.6 avg - OpenAI flagship
         ]
     }
     
@@ -115,10 +134,10 @@ class LLMManager:
             # Build model list for router
             model_list = []
             
-            # OpenAI models
+            # OpenAI GPT-5 models only (2025)
             if settings.OPENAI_API_KEY:
                 openai_models = [
-                    "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"
+                    "gpt-5", "gpt-5-mini", "gpt-5-nano"
                 ]
                 for model in openai_models:
                     model_list.append({
@@ -129,12 +148,11 @@ class LLMManager:
                         }
                     })
             
-            # Anthropic models
+            # Anthropic models (2025)
             if settings.ANTHROPIC_API_KEY:
                 anthropic_models = [
-                    "claude-3-opus-20240229",
-                    "claude-3-sonnet-20240229", 
-                    "claude-3-haiku-20240307"
+                    "claude-opus-4.1", "claude-sonnet-4", "claude-3.7-sonnet",
+                    "claude-3.5-sonnet-20241022", "claude-3.5-haiku-20241022"
                 ]
                 for model in anthropic_models:
                     model_list.append({
@@ -145,9 +163,12 @@ class LLMManager:
                         }
                     })
             
-            # Google models (optional)
+            # Google models (2025)
             if settings.GOOGLE_API_KEY:
-                google_models = ["gemini-pro", "gemini-pro-vision"]
+                google_models = [
+                    "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", 
+                    "gemini-2.0-flash", "gemini-2.0-flash-lite"
+                ]
                 for model in google_models:
                     model_list.append({
                         "model_name": model,
@@ -159,11 +180,23 @@ class LLMManager:
             
             # DeepSeek models (optional)
             if settings.DEEPSEEK_API_KEY:
+                deepseek_models = ["deepseek-chat", "deepseek-v3"]
+                for model in deepseek_models:
+                    model_list.append({
+                        "model_name": model,
+                        "litellm_params": {
+                            "model": f"deepseek/{model}",
+                            "api_key": settings.DEEPSEEK_API_KEY
+                        }
+                    })
+            
+            # Qwen models (optional)
+            if settings.QWEN_API_KEY:
                 model_list.append({
-                    "model_name": "deepseek-chat",
+                    "model_name": "qwen-2.5-coder-32b",
                     "litellm_params": {
-                        "model": "deepseek/deepseek-chat",
-                        "api_key": settings.DEEPSEEK_API_KEY
+                        "model": "qwen/qwen-2.5-coder-32b",
+                        "api_key": settings.QWEN_API_KEY
                     }
                 })
             
@@ -171,13 +204,30 @@ class LLMManager:
                 logger.warning("No LLM API keys configured")
                 return
             
-            # Initialize router with fallbacks
+            # Initialize router with cost-optimized fallbacks (2025)
             self.router = Router(
                 model_list=model_list,
                 fallbacks=[
-                    {"gpt-4": ["gpt-4-turbo", "claude-3-sonnet-20240229"]},
-                    {"claude-3-opus-20240229": ["gpt-4", "claude-3-sonnet-20240229"]},
-                    {"gpt-3.5-turbo": ["claude-3-haiku-20240307", "gemini-pro"]},
+                    # Fast tier fallbacks (cheapest options first)
+                    {"gemini-2.0-flash-lite": ["deepseek-chat", "gemini-2.5-flash-lite"]},
+                    {"deepseek-chat": ["gemini-2.0-flash-lite", "gemini-2.5-flash-lite"]},
+                    {"gemini-2.5-flash-lite": ["gemini-2.0-flash-lite", "deepseek-chat"]},
+                    {"claude-3.5-haiku-20241022": ["gemini-2.0-flash-lite", "gpt-5-nano"]},
+                    {"gpt-5-nano": ["claude-3.5-haiku-20241022", "gemini-2.5-flash-lite"]},
+                    
+                    # Balanced tier fallbacks (cost-efficient alternatives)
+                    {"gemini-2.5-flash": ["gemini-2.0-flash", "deepseek-chat"]},
+                    {"gemini-2.0-flash": ["gemini-2.5-flash", "deepseek-chat"]},
+                    {"claude-3.5-sonnet-20241022": ["deepseek-chat", "claude-sonnet-4"]},
+                    {"claude-sonnet-4": ["claude-3.5-sonnet-20241022", "deepseek-chat"]},
+                    {"gpt-5-mini": ["claude-sonnet-4", "deepseek-chat"]},
+                    
+                    # Quality tier fallbacks (cost-conscious quality)
+                    {"claude-3.5-sonnet-20241022": ["deepseek-chat", "claude-sonnet-4"]},
+                    {"claude-sonnet-4": ["claude-3.5-sonnet-20241022", "claude-3.7-sonnet"]},
+                    {"claude-3.7-sonnet": ["claude-sonnet-4", "deepseek-chat"]},
+                    {"gpt-5": ["claude-3.7-sonnet", "claude-sonnet-4"]},
+                    {"claude-opus-4.1": ["gpt-5", "claude-3.7-sonnet"]},
                 ]
             )
             
