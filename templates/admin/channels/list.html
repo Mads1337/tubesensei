@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}Channels - TubeSensei Admin{% endblock %}
+
+{% block page_title %}Monitored Channels{% endblock %}
+{% block page_description %}Manage and monitor YouTube channels for content analysis{% endblock %}
+
+{% block content %}
+<div class="channels-container">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Monitored Channels</h1>
+        <button 
+            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            hx-get="/admin/channels/add"
+            hx-target="#modal-container"
+            hx-swap="innerHTML"
+        >
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Channel
+        </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-6">
+        <form class="flex gap-4" hx-get="/admin/channels" hx-target="#channels-grid" hx-swap="innerHTML">
+            <div class="flex-1">
+                <input 
+                    type="text" 
+                    name="search"
+                    placeholder="Search channels..."
+                    value="{{ filters.search or '' }}"
+                    class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                    hx-get="/admin/channels"
+                    hx-trigger="keyup changed delay:500ms"
+                    hx-target="#channels-grid"
+                    hx-swap="innerHTML"
+                >
+            </div>
+            <select 
+                name="status" 
+                class="block px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                hx-get="/admin/channels"
+                hx-trigger="change"
+                hx-target="#channels-grid"
+                hx-swap="innerHTML"
+            >
+                <option value="">All Status</option>
+                <option value="active" {% if filters.status == 'active' %}selected{% endif %}>
+                    Active
+                </option>
+                <option value="paused" {% if filters.status == 'paused' %}selected{% endif %}>
+                    Paused
+                </option>
+                <option value="inactive" {% if filters.status == 'inactive' %}selected{% endif %}>
+                    Inactive
+                </option>
+            </select>
+            <button type="submit" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                Apply Filters
+            </button>
+        </form>
+    </div>
+
+    <!-- Channels Grid -->
+    <div id="channels-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for channel in channels %}
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+            <div class="p-6">
+                <!-- Channel Header -->
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center">
+                        {% if channel.thumbnail_url %}
+                        <img 
+                            src="{{ channel.thumbnail_url }}" 
+                            alt="{{ channel.name }}"
+                            class="w-12 h-12 rounded-full mr-3"
+                        >
+                        {% else %}
+                        <div class="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center mr-3">
+                            <i class="fas fa-tv text-gray-400"></i>
+                        </div>
+                        {% endif %}
+                        <div>
+                            <h3 class="font-semibold text-gray-900 dark:text-white">
+                                <a href="/admin/channels/{{ channel.id }}" 
+                                   class="hover:text-primary-600 dark:hover:text-primary-400">
+                                    {{ channel.name }}
+                                </a>
+                            </h3>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                       {% if channel.status == 'active' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                                       {% elif channel.status == 'paused' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300
+                                       {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300{% endif %}">
+                                {{ channel.status | title }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Channel Stats -->
+                <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    <div>
+                        <span class="font-medium">Subscribers:</span>
+                        {% if channel.subscriber_count %}
+                            {{ "{:,}".format(channel.subscriber_count) }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div>
+                    <div>
+                        <span class="font-medium">Videos:</span>
+                        {% if channel.video_count %}
+                            {{ channel.video_count }}
+                        {% else %}
+                            0
+                        {% endif %}
+                    </div>
+                    <div>
+                        <span class="font-medium">Ideas:</span>
+                        {% if channel.ideas_count %}
+                            {{ channel.ideas_count }}
+                        {% else %}
+                            0
+                        {% endif %}
+                    </div>
+                    <div>
+                        <span class="font-medium">Last Sync:</span>
+                        {% if channel.last_sync_at %}
+                            {{ channel.last_sync_at.strftime('%m/%d') }}
+                        {% else %}
+                            Never
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex space-x-2">
+                    <button 
+                        class="flex-1 text-xs px-3 py-1 bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300 rounded hover:bg-primary-200 dark:hover:bg-primary-800"
+                        hx-post="/admin/channels/{{ channel.id }}/sync"
+                        hx-target="#channels-grid"
+                        hx-swap="outerHTML"
+                        hx-indicator="#loading-indicator"
+                    >
+                        <i class="fas fa-sync-alt mr-1"></i>
+                        Sync
+                    </button>
+                    <a href="/admin/channels/{{ channel.id }}/edit" 
+                       class="flex-1 text-center text-xs px-3 py-1 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
+                        <i class="fas fa-edit mr-1"></i>
+                        Edit
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% if not channels %}
+        <div class="col-span-full text-center py-12">
+            <div class="text-gray-400 dark:text-gray-600 mb-4">
+                <i class="fas fa-tv text-6xl"></i>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No channels found</h3>
+            <p class="text-gray-600 dark:text-gray-400 mb-4">
+                {% if filters.search or filters.status %}
+                    Try adjusting your filters or search terms.
+                {% else %}
+                    Get started by adding your first YouTube channel.
+                {% endif %}
+            </p>
+            <button 
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700"
+                hx-get="/admin/channels/add"
+                hx-target="#modal-container"
+                hx-swap="innerHTML"
+            >
+                <i class="fas fa-plus mr-2"></i>
+                Add Your First Channel
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 sm:px-6 mt-6 rounded-lg">
+        <div class="flex flex-1 justify-between sm:hidden">
+            {% if page > 1 %}
+            <a href="?page={{ page - 1 }}{% if filters.search %}&search={{ filters.search }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}" 
+               class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                Previous
+            </a>
+            {% endif %}
+            {% if page < total_pages %}
+            <a href="?page={{ page + 1 }}{% if filters.search %}&search={{ filters.search }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}" 
+               class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                Next
+            </a>
+            {% endif %}
+        </div>
+        <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div>
+                <p class="text-sm text-gray-700 dark:text-gray-300">
+                    Showing page <span class="font-medium">{{ page }}</span> of <span class="font-medium">{{ total_pages }}</span>
+                    (<span class="font-medium">{{ total }}</span> total channels)
+                </p>
+            </div>
+            <div>
+                <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                    {% if page > 1 %}
+                    <a href="?page={{ page - 1 }}{% if filters.search %}&search={{ filters.search }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}" 
+                       class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                    {% endif %}
+                    
+                    {% for p in range(1, total_pages + 1) %}
+                        {% if p == page %}
+                        <span class="relative inline-flex items-center px-4 py-2 border border-primary-500 bg-primary-50 dark:bg-primary-900 text-sm font-medium text-primary-600 dark:text-primary-300">
+                            {{ p }}
+                        </span>
+                        {% elif p <= 3 or p >= total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+                        <a href="?page={{ p }}{% if filters.search %}&search={{ filters.search }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}" 
+                           class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600">
+                            {{ p }}
+                        </a>
+                        {% elif p == page - 2 or p == page + 2 %}
+                        <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300">
+                            ...
+                        </span>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page < total_pages %}
+                    <a href="?page={{ page + 1 }}{% if filters.search %}&search={{ filters.search }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}" 
+                       class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                    {% endif %}
+                </nav>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh channels periodically
+setInterval(function() {
+    if (!document.hidden) {
+        htmx.trigger('#channels-grid', 'refresh');
+    }
+}, 30000); // Refresh every 30 seconds
+</script>
+{% endblock %}

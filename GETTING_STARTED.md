@@ -56,6 +56,9 @@ cd TubeSensei
 
 # Install Python dependencies
 pip install -r requirements.txt
+
+# Install honcho process manager (included in requirements.txt)
+# This enables the single-command startup
 ```
 
 ### 2. Configure Environment Variables
@@ -114,9 +117,49 @@ python init_db.py
 
 ## 🚀 Starting the System
 
-You need to run **4 components** in separate terminals:
+**NEW: Single Command Startup!** 🎉
 
-### Terminal 1: Infrastructure Services
+You now only need **ONE terminal** to run the entire TubeSensei system:
+
+### Single Terminal: All Services
+
+```bash
+# Start everything with one command
+./run.sh
+```
+
+That's it! This will:
+1. Start all Docker services (PostgreSQL, Redis, Flower, Prometheus)
+2. Wait for services to be healthy
+3. Run database migrations
+4. Start all Python services (FastAPI server, Celery workers, Admin interface)
+
+**Expected Services:**
+- PostgreSQL (port 5433)
+- Redis (port 6379) 
+- Flower (port 5555)
+- Prometheus (port 9090)
+- Main API Server (port 8000)
+- Admin Interface (port 8001)
+- Celery Workers (background processing)
+
+### Stopping Services
+
+```bash
+# Stop all Python services (keeps Docker running)
+./stop.sh
+
+# Or press Ctrl+C in the terminal running ./run.sh
+```
+
+### Alternative: Manual Startup (Old Method)
+
+If you prefer the old 4-terminal setup, you can still use it:
+
+<details>
+<summary>Click to expand manual startup instructions</summary>
+
+#### Terminal 1: Infrastructure Services
 
 ```bash
 # Start PostgreSQL, Redis, Flower monitoring, and Prometheus
@@ -126,13 +169,7 @@ docker-compose up -d
 docker-compose ps
 ```
 
-**Expected Services:**
-- PostgreSQL (port 5433)
-- Redis (port 6379) 
-- Flower (port 5555)
-- Prometheus (port 9090)
-
-### Terminal 2: FastAPI Server
+#### Terminal 2: FastAPI Server
 
 ```bash
 cd tubesensei
@@ -141,13 +178,7 @@ cd tubesensei
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-**Expected Output:**
-```
-INFO: Uvicorn running on http://0.0.0.0:8000
-INFO: Application startup complete
-```
-
-### Terminal 3: Celery Workers
+#### Terminal 3: Celery Workers
 
 ```bash
 cd tubesensei
@@ -156,13 +187,7 @@ cd tubesensei
 celery -A app.celery_app worker --loglevel=info --concurrency=4
 ```
 
-**Expected Output:**
-```
-[INFO/MainProcess] Connected to redis://localhost:6379/0
-[INFO/MainProcess] Ready to process tasks
-```
-
-### Terminal 4: Admin Web Server (Optional)
+#### Terminal 4: Admin Web Server (Optional)
 
 ```bash
 cd tubesensei
@@ -170,6 +195,8 @@ cd tubesensei
 # Start admin web interface
 uvicorn app.main_enhanced:app --host 0.0.0.0 --port 8001 --reload
 ```
+
+</details>
 
 ### 🎉 Verify System Health
 
@@ -702,10 +729,9 @@ LIMIT 20;
 - [ ] Run database migrations: `alembic upgrade head`
 
 **Launch Phase**:
-- [ ] Start infrastructure: `docker-compose up -d`
-- [ ] Start API server: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
-- [ ] Start workers: `celery -A app.celery_app worker --loglevel=info`
+- [ ] Start everything with one command: `./run.sh`
 - [ ] Verify health: `curl http://localhost:8000/health`
+- [ ] Alternative: Use the old 4-terminal setup if preferred
 
 **Processing Phase**:
 - [ ] Add your first channel via API

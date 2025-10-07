@@ -1,0 +1,230 @@
+<!-- Single Channel Card Partial for HTMX -->
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+    <div class="p-6">
+        <!-- Channel Header -->
+        <div class="flex items-start justify-between mb-4">
+            <div class="flex items-center">
+                {% if channel.thumbnail_url %}
+                <img 
+                    src="{{ channel.thumbnail_url }}" 
+                    alt="{{ channel.name }}"
+                    class="w-12 h-12 rounded-full mr-3"
+                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                >
+                <div class="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center mr-3" style="display: none;">
+                    <i class="fas fa-tv text-gray-400"></i>
+                </div>
+                {% else %}
+                <div class="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center mr-3">
+                    <i class="fas fa-tv text-gray-400"></i>
+                </div>
+                {% endif %}
+                <div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white">
+                        <a href="/admin/channels/{{ channel.id }}" 
+                           class="hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                            {{ channel.name }}
+                        </a>
+                    </h3>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors
+                               {% if channel.status == 'active' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                               {% elif channel.status == 'paused' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300
+                               {% elif channel.status == 'processing' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300
+                               {% elif channel.status == 'error' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300
+                               {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300{% endif %}">
+                        {% if channel.status == 'processing' %}
+                            <i class="fas fa-spinner fa-spin mr-1"></i>
+                        {% elif channel.status == 'error' %}
+                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                        {% elif channel.status == 'active' %}
+                            <i class="fas fa-check-circle mr-1"></i>
+                        {% elif channel.status == 'paused' %}
+                            <i class="fas fa-pause-circle mr-1"></i>
+                        {% else %}
+                            <i class="fas fa-circle mr-1"></i>
+                        {% endif %}
+                        {{ channel.status | title }}
+                    </span>
+                </div>
+            </div>
+            
+            <!-- Quick actions dropdown -->
+            <div class="relative" x-data="{ open: false }">
+                <button @click="open = !open" 
+                        class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+                <div x-show="open" 
+                     @click.away="open = false"
+                     x-transition:enter="transition ease-out duration-100"
+                     x-transition:enter-start="transform opacity-0 scale-95"
+                     x-transition:enter-end="transform opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-75"
+                     x-transition:leave-start="transform opacity-100 scale-100"
+                     x-transition:leave-end="transform opacity-0 scale-95"
+                     class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 z-10">
+                    <div class="py-1">
+                        <a href="/admin/channels/{{ channel.id }}" 
+                           class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                            <i class="fas fa-eye mr-2"></i> View Details
+                        </a>
+                        <a href="/admin/channels/{{ channel.id }}/edit" 
+                           class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                            <i class="fas fa-edit mr-2"></i> Edit
+                        </a>
+                        <button 
+                            class="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            hx-post="/admin/channels/{{ channel.id }}/sync"
+                            hx-target="closest .bg-white"
+                            hx-swap="outerHTML"
+                            hx-indicator="#loading-indicator"
+                        >
+                            <i class="fas fa-sync-alt mr-2"></i> Sync Now
+                        </button>
+                        {% if channel.status == 'active' %}
+                        <button 
+                            class="block w-full text-left px-4 py-2 text-sm text-yellow-700 dark:text-yellow-300 hover:bg-yellow-50 dark:hover:bg-yellow-900"
+                            hx-put="/admin/channels/{{ channel.id }}/status"
+                            hx-vals='{"status": "paused"}'
+                            hx-target="closest .bg-white"
+                            hx-swap="outerHTML"
+                        >
+                            <i class="fas fa-pause mr-2"></i> Pause
+                        </button>
+                        {% elif channel.status == 'paused' %}
+                        <button 
+                            class="block w-full text-left px-4 py-2 text-sm text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900"
+                            hx-put="/admin/channels/{{ channel.id }}/status"
+                            hx-vals='{"status": "active"}'
+                            hx-target="closest .bg-white"
+                            hx-swap="outerHTML"
+                        >
+                            <i class="fas fa-play mr-2"></i> Resume
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Channel Stats -->
+        <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <div class="flex items-center">
+                <i class="fas fa-users text-gray-400 mr-1 w-3"></i>
+                <span class="font-medium">Subscribers:</span>
+                <span class="ml-1">
+                    {% if channel.subscriber_count %}
+                        {% if channel.subscriber_count >= 1000000 %}
+                            {{ "%.1f"|format(channel.subscriber_count / 1000000) }}M
+                        {% elif channel.subscriber_count >= 1000 %}
+                            {{ "%.1f"|format(channel.subscriber_count / 1000) }}K
+                        {% else %}
+                            {{ "{:,}".format(channel.subscriber_count) }}
+                        {% endif %}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </span>
+            </div>
+            <div class="flex items-center">
+                <i class="fas fa-video text-gray-400 mr-1 w-3"></i>
+                <span class="font-medium">Videos:</span>
+                <span class="ml-1">{{ channel.video_count or 0 }}</span>
+            </div>
+            <div class="flex items-center">
+                <i class="fas fa-lightbulb text-gray-400 mr-1 w-3"></i>
+                <span class="font-medium">Ideas:</span>
+                <span class="ml-1">{{ channel.ideas_count or 0 }}</span>
+            </div>
+            <div class="flex items-center">
+                <i class="fas fa-clock text-gray-400 mr-1 w-3"></i>
+                <span class="font-medium">Last Sync:</span>
+                <span class="ml-1">
+                    {% if channel.last_sync_at %}
+                        {% set days_ago = (now() - channel.last_sync_at).days %}
+                        {% if days_ago == 0 %}
+                            Today
+                        {% elif days_ago == 1 %}
+                            Yesterday
+                        {% elif days_ago < 7 %}
+                            {{ days_ago }}d ago
+                        {% else %}
+                            {{ channel.last_sync_at.strftime('%m/%d') }}
+                        {% endif %}
+                    {% else %}
+                        Never
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+
+        <!-- Recent Activity Indicator -->
+        {% if channel.recent_videos_count or channel.recent_ideas_count %}
+        <div class="mb-4">
+            <div class="flex items-center space-x-4 text-xs">
+                {% if channel.recent_videos_count %}
+                <div class="flex items-center text-blue-600 dark:text-blue-400">
+                    <div class="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400 mr-2 animate-pulse"></div>
+                    {{ channel.recent_videos_count }} new video{{ 's' if channel.recent_videos_count != 1 else '' }}
+                </div>
+                {% endif %}
+                {% if channel.recent_ideas_count %}
+                <div class="flex items-center text-green-600 dark:text-green-400">
+                    <div class="w-2 h-2 rounded-full bg-green-600 dark:bg-green-400 mr-2 animate-pulse"></div>
+                    {{ channel.recent_ideas_count }} new idea{{ 's' if channel.recent_ideas_count != 1 else '' }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Actions -->
+        <div class="flex space-x-2">
+            {% if channel.status != 'processing' %}
+            <button 
+                class="flex-1 text-xs px-3 py-1.5 bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300 rounded hover:bg-primary-200 dark:hover:bg-primary-800 transition-colors"
+                hx-post="/admin/channels/{{ channel.id }}/sync"
+                hx-target="closest .bg-white"
+                hx-swap="outerHTML"
+                hx-indicator="#loading-indicator"
+            >
+                <i class="fas fa-sync-alt mr-1"></i>
+                Sync
+            </button>
+            {% else %}
+            <button 
+                class="flex-1 text-xs px-3 py-1.5 bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 rounded cursor-not-allowed"
+                disabled
+            >
+                <i class="fas fa-spinner fa-spin mr-1"></i>
+                Processing...
+            </button>
+            {% endif %}
+            
+            <a href="/admin/channels/{{ channel.id }}/edit" 
+               class="flex-1 text-center text-xs px-3 py-1.5 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                <i class="fas fa-edit mr-1"></i>
+                Edit
+            </a>
+            
+            <a href="/admin/channels/{{ channel.id }}" 
+               class="flex-1 text-center text-xs px-3 py-1.5 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                <i class="fas fa-arrow-right mr-1"></i>
+                View
+            </a>
+        </div>
+
+        <!-- Error indicator if applicable -->
+        {% if channel.last_error_message %}
+        <div class="mt-3 p-2 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded text-xs">
+            <div class="flex items-center text-red-800 dark:text-red-200">
+                <i class="fas fa-exclamation-circle mr-1"></i>
+                <span class="font-medium">Last sync error:</span>
+            </div>
+            <p class="mt-1 text-red-700 dark:text-red-300">
+                {{ channel.last_error_message[:100] }}{% if channel.last_error_message|length > 100 %}...{% endif %}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>

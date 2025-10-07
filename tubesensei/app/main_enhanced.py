@@ -16,7 +16,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.sessions import SessionMiddleware
-import aioredis
+import redis.asyncio as aioredis
 
 from app.core.config import settings
 from app.core.exceptions import setup_exception_handlers
@@ -24,23 +24,41 @@ from app.database import get_db as get_session, init_db, close_db
 
 # Import existing routers
 from app.api.admin import router as admin_router
-from app.api.auth import router as auth_router
-from app.api.v1 import router as api_v1_router
+# from app.api.auth import router as auth_router
+# from app.api.v1 import router as api_v1_router
 
 # Setup enhanced logging
 from app.utils.logging import setup_logging
-logger = setup_logging()
+import logging
+
+# Setup logger with fallback
+try:
+    logger = setup_logging()
+except Exception:
+    logger = None
+
+def safe_log_info(message):
+    if logger:
+        logger.info(message)
+    else:
+        print(f"INFO: {message}")
+
+def safe_log_warning(message):
+    if logger:
+        logger.warning(message)
+    else:
+        print(f"WARNING: {message}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle"""
-    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    safe_log_info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    safe_log_info(f"Environment: {settings.ENVIRONMENT}")
     
     # Initialize database
     await init_db()
-    logger.info("Database initialized")
+    safe_log_info("Database initialized")
     
     # Initialize Redis connection for sessions
     app.state.redis = await aioredis.from_url(
@@ -49,7 +67,7 @@ async def lifespan(app: FastAPI):
         decode_responses=True,
         max_connections=settings.REDIS_MAX_CONNECTIONS
     )
-    logger.info("Redis connection established")
+    safe_log_info("Redis connection established")
     
     # Setup template directories
     template_dir = Path(__file__).parent.parent.parent / settings.admin.TEMPLATE_DIR
@@ -59,16 +77,16 @@ async def lifespan(app: FastAPI):
     template_dir.mkdir(parents=True, exist_ok=True)
     static_dir.mkdir(parents=True, exist_ok=True)
     
-    logger.info(f"Template directory: {template_dir}")
-    logger.info(f"Static directory: {static_dir}")
+    safe_log_info(f"Template directory: {template_dir}")
+    safe_log_info(f"Static directory: {static_dir}")
     
     yield
     
     # Cleanup
-    logger.info("Shutting down application...")
+    safe_log_info("Shutting down application...")
     await app.state.redis.close()
     await close_db()
-    logger.info("Application shutdown complete")
+    safe_log_info("Application shutdown complete")
 
 
 # Create FastAPI app
@@ -109,7 +127,6 @@ app.add_middleware(
     max_age=settings.security.SESSION_EXPIRE_HOURS * 3600,
     same_site=settings.security.SESSION_COOKIE_SAMESITE,
     https_only=settings.security.SESSION_COOKIE_SECURE,
-    httponly=settings.security.SESSION_COOKIE_HTTPONLY,
 )
 
 # 4. GZip Middleware
@@ -133,16 +150,7 @@ async def log_requests(request: Request, call_next):
     start_time = time.time()
     
     # Log request
-    logger.info(
-        "Request started",
-        extra={
-            "request_id": getattr(request.state, "request_id", None),
-            "method": request.method,
-            "path": request.url.path,
-            "query_params": dict(request.query_params),
-            "client": request.client.host if request.client else None,
-        }
-    )
+    safe_log_info(f"Request started: {request.method} {request.url.path}")
     
     # Process request
     response = await call_next(request)
@@ -151,16 +159,7 @@ async def log_requests(request: Request, call_next):
     process_time = time.time() - start_time
     
     # Log response
-    logger.info(
-        "Request completed",
-        extra={
-            "request_id": getattr(request.state, "request_id", None),
-            "method": request.method,
-            "path": request.url.path,
-            "status_code": response.status_code,
-            "process_time": f"{process_time:.3f}s",
-        }
-    )
+    safe_log_info(f"Request completed: {request.method} {request.url.path} - {response.status_code} ({process_time:.3f}s)")
     
     # Add processing time header
     response.headers["X-Process-Time"] = str(process_time)
@@ -192,7 +191,7 @@ if static_dir.exists():
         StaticFiles(directory=str(static_dir)),
         name="static"
     )
-    logger.info(f"Static files mounted at {settings.admin.STATIC_URL}")
+    safe_log_info(f"Static files mounted at {settings.admin.STATIC_URL}")
 
 # Setup templates
 template_dir = Path(__file__).parent.parent.parent / settings.admin.TEMPLATE_DIR
@@ -203,28 +202,28 @@ setup_exception_handlers(app)
 
 # Include routers
 # Authentication routes
-if hasattr(app, 'state'):
-    try:
-        app.include_router(auth_router, prefix="/api/auth", tags=["authentication"])
-        logger.info("Auth router included")
-    except ImportError:
-        logger.warning("Auth router not yet implemented")
+# if hasattr(app, 'state'):
+#     try:
+#         app.include_router(auth_router, prefix="/api/auth", tags=["authentication"])
+#         logger.info("Auth router included")
+#     except ImportError:
+#         logger.warning("Auth router not yet implemented")
 
 # Admin routes
 if hasattr(app, 'state'):
     try:
-        app.include_router(admin_router, prefix=settings.admin.ADMIN_PATH_PREFIX, tags=["admin"])
-        logger.info("Admin router included")
+        app.include_router(admin_router, tags=["admin"])
+        safe_log_info("Admin router included")
     except ImportError:
-        logger.warning("Admin router not yet implemented")
+        safe_log_warning("Admin router not yet implemented")
 
 # API v1 routes
-if hasattr(app, 'state'):
-    try:
-        app.include_router(api_v1_router, prefix="/api/v1", tags=["api"])
-        logger.info("API v1 router included")
-    except ImportError:
-        logger.warning("API v1 router not yet implemented")
+# if hasattr(app, 'state'):
+#     try:
+#         app.include_router(api_v1_router, prefix="/api/v1", tags=["api"])
+#         logger.info("API v1 router included")
+#     except ImportError:
+#         logger.warning("API v1 router not yet implemented")
 
 # Root endpoint
 @app.get("/", response_class=HTMLResponse)

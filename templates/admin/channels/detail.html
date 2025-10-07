@@ -1,0 +1,372 @@
+{% extends "base.html" %}
+
+{% block title %}{{ channel.name }} - Channel Details - TubeSensei Admin{% endblock %}
+
+{% block page_title %}{{ channel.name }}{% endblock %}
+{% block page_description %}Detailed view and management for {{ channel.name }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Channel Header -->
+    <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <div class="flex items-start justify-between">
+                <div class="flex items-center">
+                    {% if channel.thumbnail_url %}
+                    <img 
+                        src="{{ channel.thumbnail_url }}" 
+                        alt="{{ channel.name }}"
+                        class="w-16 h-16 rounded-full mr-4"
+                    >
+                    {% else %}
+                    <div class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center mr-4">
+                        <i class="fas fa-tv text-gray-400 text-2xl"></i>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ channel.name }}</h1>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            <a href="{{ channel.url }}" target="_blank" class="hover:text-primary-600">
+                                <i class="fas fa-external-link-alt mr-1"></i>
+                                {{ channel.url }}
+                            </a>
+                        </p>
+                        <div class="flex items-center space-x-4 mt-2">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                       {% if channel.status == 'active' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                                       {% elif channel.status == 'paused' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300
+                                       {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300{% endif %}">
+                                {{ channel.status | title }}
+                            </span>
+                            {% if channel.last_sync_at %}
+                            <span class="text-sm text-gray-500 dark:text-gray-400">
+                                <i class="fas fa-sync-alt mr-1"></i>
+                                Last synced {{ channel.last_sync_at.strftime('%B %d, %Y at %I:%M %p') }}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="flex space-x-2">
+                    <button 
+                        class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                        hx-post="/admin/channels/{{ channel.id }}/sync"
+                        hx-target="#sync-status"
+                        hx-indicator="#sync-indicator"
+                    >
+                        <span id="sync-indicator" class="htmx-indicator">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>
+                        </span>
+                        <i class="fas fa-sync-alt mr-2"></i>
+                        Sync Now
+                    </button>
+                    <a href="/admin/channels/{{ channel.id }}/edit" 
+                       class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
+                        <i class="fas fa-edit mr-2"></i>
+                        Edit
+                    </a>
+                </div>
+            </div>
+            
+            <div id="sync-status" class="mt-4">
+                <!-- Sync status messages will appear here -->
+            </div>
+
+            {% if channel.description %}
+            <div class="mt-4">
+                <p class="text-gray-700 dark:text-gray-300">{{ channel.description }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <!-- Subscribers -->
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-users text-2xl text-primary-600"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                Subscribers
+                            </dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                {% if channel.subscriber_count %}
+                                    {{ "{:,}".format(channel.subscriber_count) }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Videos -->
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-video text-2xl text-green-600"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                Videos Tracked
+                            </dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                {{ channel.video_count or 0 }}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ideas Generated -->
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-lightbulb text-2xl text-yellow-600"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                Ideas Generated
+                            </dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                {{ channel.ideas_count or 0 }}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Processing Status -->
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-cogs text-2xl text-purple-600"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                Active Jobs
+                            </dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                {{ channel.active_jobs_count or 0 }}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+        <div class="border-b border-gray-200 dark:border-gray-700">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs" x-data="{ activeTab: 'videos' }">
+                <button 
+                    @click="activeTab = 'videos'"
+                    :class="activeTab === 'videos' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm"
+                >
+                    <i class="fas fa-video mr-2"></i>
+                    Recent Videos
+                </button>
+                <button 
+                    @click="activeTab = 'ideas'"
+                    :class="activeTab === 'ideas' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm"
+                >
+                    <i class="fas fa-lightbulb mr-2"></i>
+                    Generated Ideas
+                </button>
+                <button 
+                    @click="activeTab = 'analytics'"
+                    :class="activeTab === 'analytics' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm"
+                >
+                    <i class="fas fa-chart-line mr-2"></i>
+                    Analytics
+                </button>
+                <button 
+                    @click="activeTab = 'settings'"
+                    :class="activeTab === 'settings' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm"
+                >
+                    <i class="fas fa-cog mr-2"></i>
+                    Settings
+                </button>
+            </nav>
+        </div>
+
+        <div class="p-6">
+            <!-- Recent Videos Tab -->
+            <div x-show="activeTab === 'videos'" class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">Recent Videos</h3>
+                    <button 
+                        class="text-sm text-primary-600 hover:text-primary-500"
+                        hx-get="/admin/channels/{{ channel.id }}/videos"
+                        hx-target="#videos-list"
+                        hx-swap="innerHTML"
+                    >
+                        <i class="fas fa-sync-alt mr-1"></i>
+                        Refresh
+                    </button>
+                </div>
+                <div id="videos-list" 
+                     hx-get="/admin/channels/{{ channel.id }}/videos"
+                     hx-trigger="load"
+                     hx-swap="innerHTML">
+                    <div class="animate-pulse space-y-4">
+                        {% for i in range(3) %}
+                        <div class="flex space-x-4">
+                            <div class="bg-gray-200 dark:bg-gray-600 rounded w-24 h-16"></div>
+                            <div class="flex-1 space-y-2">
+                                <div class="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4"></div>
+                                <div class="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2"></div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generated Ideas Tab -->
+            <div x-show="activeTab === 'ideas'" class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">Generated Ideas</h3>
+                    <button 
+                        class="text-sm text-primary-600 hover:text-primary-500"
+                        hx-get="/admin/channels/{{ channel.id }}/ideas"
+                        hx-target="#ideas-list"
+                        hx-swap="innerHTML"
+                    >
+                        <i class="fas fa-sync-alt mr-1"></i>
+                        Refresh
+                    </button>
+                </div>
+                <div id="ideas-list" 
+                     hx-get="/admin/channels/{{ channel.id }}/ideas"
+                     hx-trigger="load delay:1s"
+                     hx-swap="innerHTML">
+                    <div class="animate-pulse space-y-4">
+                        {% for i in range(5) %}
+                        <div class="space-y-2">
+                            <div class="h-4 bg-gray-200 dark:bg-gray-600 rounded w-full"></div>
+                            <div class="h-3 bg-gray-200 dark:bg-gray-600 rounded w-2/3"></div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Tab -->
+            <div x-show="activeTab === 'analytics'" class="space-y-6">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">Channel Analytics</h3>
+                
+                <!-- Analytics Charts -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-4">Video Upload Frequency</h4>
+                        <div class="h-64 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                            <div>
+                                <i class="fas fa-chart-bar text-4xl mb-2"></i>
+                                <p>Chart will be implemented with real data</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-4">Idea Generation Trends</h4>
+                        <div class="h-64 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                            <div>
+                                <i class="fas fa-chart-line text-4xl mb-2"></i>
+                                <p>Chart will be implemented with real data</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div x-show="activeTab === 'settings'" class="space-y-6">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">Channel Settings</h3>
+                
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-4">Quick Actions</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <button class="text-left p-3 bg-white dark:bg-gray-600 rounded border hover:bg-gray-50 dark:hover:bg-gray-500">
+                            <i class="fas fa-pause text-yellow-600 mr-2"></i>
+                            <span class="text-sm">Pause Monitoring</span>
+                        </button>
+                        <button class="text-left p-3 bg-white dark:bg-gray-600 rounded border hover:bg-gray-50 dark:hover:bg-gray-500">
+                            <i class="fas fa-sync-alt text-blue-600 mr-2"></i>
+                            <span class="text-sm">Force Full Sync</span>
+                        </button>
+                        <button class="text-left p-3 bg-white dark:bg-gray-600 rounded border hover:bg-gray-50 dark:hover:bg-gray-500">
+                            <i class="fas fa-robot text-purple-600 mr-2"></i>
+                            <span class="text-sm">Generate New Ideas</span>
+                        </button>
+                        <button class="text-left p-3 bg-white dark:bg-gray-600 rounded border hover:bg-gray-50 dark:hover:bg-gray-500 text-red-600">
+                            <i class="fas fa-trash mr-2"></i>
+                            <span class="text-sm">Delete Channel</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-4">Channel Information</h4>
+                    <dl class="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Channel ID</dt>
+                            <dd class="text-sm text-gray-900 dark:text-white font-mono">{{ channel.id }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">YouTube ID</dt>
+                            <dd class="text-sm text-gray-900 dark:text-white font-mono">{{ channel.youtube_id or 'N/A' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Created</dt>
+                            <dd class="text-sm text-gray-900 dark:text-white">{{ channel.created_at.strftime('%B %d, %Y') }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Last Updated</dt>
+                            <dd class="text-sm text-gray-900 dark:text-white">{{ channel.updated_at.strftime('%B %d, %Y') }}</dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle sync status updates
+    document.body.addEventListener('htmx:afterRequest', function(event) {
+        if (event.detail.pathInfo.requestPath.includes('/sync')) {
+            if (event.detail.xhr.status === 200) {
+                // Refresh the page stats after successful sync
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

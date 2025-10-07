@@ -1,5 +1,16 @@
-version: '3.8'
 services:
+  postgres:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_USER: tubesensei
+      POSTGRES_PASSWORD: tubesensei_dev
+      POSTGRES_DB: tubesensei
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     ports:
@@ -34,3 +45,5 @@ services:
       - '--web.enable-lifecycle'
     restart: unless-stopped
 
+volumes:
+  postgres_data:

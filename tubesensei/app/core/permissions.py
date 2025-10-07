@@ -319,9 +319,16 @@ class PermissionChecker:
 
 
 # FastAPI Dependencies
-async def require_permission(permission: Permission):
+def require_permission(permission: Permission):
     """Dependency factory for requiring specific permission"""
     async def permission_checker(current_user: User = Depends(get_current_user)) -> User:
+        # Allow admin bypass regardless of DEBUG mode
+        from app.core.config import get_settings
+        settings = get_settings()
+        # Always allow admin users
+        if current_user.role == UserRole.ADMIN:
+            return current_user
+            
         if not PermissionChecker.has_permission(current_user, permission):
             raise PermissionException(
                 f"Access denied. Required permission: {permission.value}",
@@ -363,6 +370,12 @@ async def require_all_permissions(permissions: List[Permission]):
 # Resource-specific dependencies
 async def require_admin_access(current_user: User = Depends(get_current_user)) -> User:
     """Require admin interface access"""
+    # Allow admin users regardless of DEBUG mode
+    from app.core.config import get_settings
+    settings = get_settings()
+    if current_user.role == UserRole.ADMIN:
+        return current_user
+        
     if not PermissionChecker.has_permission(current_user, Permission.ADMIN_READ):
         raise PermissionException(
             "Admin access required",

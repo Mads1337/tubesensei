@@ -230,21 +230,56 @@ class YouTubeAPIClient:
         handle = handle.lstrip('@')
         
         try:
+            # First try with forUsername (for legacy usernames)
             response = await self._execute_api_call(
                 YouTubeAPIOperation.CHANNELS_LIST,
                 self.youtube.channels().list,
                 part='snippet,statistics,contentDetails',
-                forHandle=handle
+                forUsername=handle
             )
             
             if not response.get('items'):
-                # Try with username
-                response = await self._execute_api_call(
-                    YouTubeAPIOperation.CHANNELS_LIST,
-                    self.youtube.channels().list,
-                    part='snippet,statistics,contentDetails',
-                    forUsername=handle
+                # For modern @handles, we need to search first
+                search_response = await self._execute_api_call(
+                    YouTubeAPIOperation.SEARCH_LIST,
+                    self.youtube.search().list,
+                    part='snippet',
+                    q=f"@{handle}",
+                    type='channel',
+                    maxResults=5  # Get more results to find exact match
                 )
+                
+                print(f"DEBUG: Search response for @{handle}: {search_response}")
+                
+                if search_response.get('items'):
+                    # Try to find exact handle match first
+                    for item in search_response['items']:
+                        channel_title = item['snippet']['title'].lower()
+                        channel_desc = item['snippet'].get('description', '').lower()
+                        
+                        # Check if the handle appears in the title or description
+                        if handle.lower() in channel_title or f"@{handle}".lower() in channel_desc:
+                            channel_id = item['snippet']['channelId']
+                            print(f"DEBUG: Found exact match for @{handle}: {item['snippet']['title']}")
+                            return await self.get_channel_info(channel_id)
+                    
+                    # If no exact match, check the first result's custom URL
+                    first_result = search_response['items'][0]
+                    channel_id = first_result['snippet']['channelId']
+                    
+                    # Get full channel info to check custom URL
+                    channel_info = await self.get_channel_info(channel_id)
+                    custom_url = channel_info.get('custom_url', '').lower()
+                    
+                    print(f"DEBUG: Checking custom URL: {custom_url} vs @{handle}")
+                    
+                    # Only return if custom URL matches the handle we're looking for
+                    if custom_url == f"@{handle.lower()}" or custom_url == handle.lower():
+                        return channel_info
+                    else:
+                        # Custom URL doesn't match, this is the wrong channel
+                        print(f"DEBUG: Custom URL mismatch. Expected @{handle}, got {custom_url}")
+                        pass  # Continue to raise ChannelNotFoundError
             
             if not response.get('items'):
                 raise ChannelNotFoundError(f"@{handle}")

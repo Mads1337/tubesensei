@@ -5,7 +5,7 @@ from typing import Optional, List
 
 class Settings(BaseSettings):
     DATABASE_URL: str = Field(
-        default="postgresql+asyncpg://bazaar_user:bazaar_pass@localhost:5433/tubesensei",
+        default="postgresql+asyncpg://tubesensei:tubesensei_dev@localhost:5433/tubesensei",
         description="PostgreSQL database connection URL with asyncpg driver"
     )
     DATABASE_POOL_SIZE: int = Field(

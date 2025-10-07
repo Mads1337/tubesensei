@@ -1,0 +1,494 @@
+{% extends "base.html" %}
+
+{% block title %}Edit {{ channel.name }} - TubeSensei Admin{% endblock %}
+
+{% block page_title %}Edit Channel{% endblock %}
+{% block page_description %}Update settings and configuration for {{ channel.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <!-- Channel Header -->
+            <div class="flex items-center mb-6">
+                {% if channel.thumbnail_url %}
+                <img 
+                    src="{{ channel.thumbnail_url }}" 
+                    alt="{{ channel.name }}"
+                    class="w-12 h-12 rounded-full mr-4"
+                >
+                {% else %}
+                <div class="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center mr-4">
+                    <i class="fas fa-tv text-gray-400"></i>
+                </div>
+                {% endif %}
+                <div>
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                        Edit {{ channel.name }}
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        Update channel settings and monitoring preferences
+                    </p>
+                </div>
+            </div>
+            
+            <form 
+                hx-put="/admin/channels/{{ channel.id }}/edit" 
+                hx-target="#form-container"
+                hx-swap="outerHTML"
+                hx-indicator="#submit-indicator"
+                class="space-y-6"
+                id="edit-channel-form"
+            >
+                <div id="form-container">
+                    <!-- Basic Information -->
+                    <div class="space-y-6">
+                        <div>
+                            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">
+                                Basic Information
+                            </h4>
+
+                            <!-- Channel URL (readonly) -->
+                            <div>
+                                <label for="url" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    YouTube Channel URL
+                                </label>
+                                <div class="mt-1">
+                                    <input 
+                                        type="url" 
+                                        name="url" 
+                                        id="url"
+                                        value="{{ channel.url }}"
+                                        readonly
+                                        class="shadow-sm bg-gray-50 dark:bg-gray-600 text-gray-500 dark:text-gray-400 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md cursor-not-allowed"
+                                    >
+                                </div>
+                                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                    Channel URL cannot be changed. Create a new channel entry if needed.
+                                </p>
+                            </div>
+
+                            <!-- Name -->
+                            <div>
+                                <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Channel Name *
+                                </label>
+                                <div class="mt-1">
+                                    <input 
+                                        type="text" 
+                                        name="name" 
+                                        id="name"
+                                        value="{{ channel.name }}"
+                                        required
+                                        class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                                    >
+                                </div>
+                            </div>
+
+                            <!-- Description -->
+                            <div>
+                                <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Description
+                                </label>
+                                <div class="mt-1">
+                                    <textarea 
+                                        name="description" 
+                                        id="description"
+                                        rows="3"
+                                        class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                                    >{{ channel.description or '' }}</textarea>
+                                </div>
+                            </div>
+
+                            <!-- Status -->
+                            <div>
+                                <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Status *
+                                </label>
+                                <select 
+                                    name="status" 
+                                    id="status"
+                                    required
+                                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md dark:bg-gray-700 dark:text-white"
+                                >
+                                    <option value="active" {% if channel.status == 'active' %}selected{% endif %}>
+                                        Active - Monitoring enabled
+                                    </option>
+                                    <option value="paused" {% if channel.status == 'paused' %}selected{% endif %}>
+                                        Paused - Temporarily disabled
+                                    </option>
+                                    <option value="inactive" {% if channel.status == 'inactive' %}selected{% endif %}>
+                                        Inactive - Disabled
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Monitoring Settings -->
+                        <div>
+                            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">
+                                Monitoring Settings
+                            </h4>
+                            
+                            <!-- Auto Sync -->
+                            <div class="flex items-start">
+                                <div class="flex items-center h-5">
+                                    <input 
+                                        id="auto_sync" 
+                                        name="auto_sync" 
+                                        type="checkbox" 
+                                        {% if channel.auto_sync %}checked{% endif %}
+                                        class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+                                    >
+                                </div>
+                                <div class="ml-3 text-sm">
+                                    <label for="auto_sync" class="font-medium text-gray-700 dark:text-gray-300">
+                                        Enable automatic synchronization
+                                    </label>
+                                    <p class="text-gray-500 dark:text-gray-400">
+                                        Automatically check for new videos and update channel information.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Sync Frequency -->
+                            <div class="mt-4">
+                                <label for="sync_frequency" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Sync Frequency (hours)
+                                </label>
+                                <div class="mt-1">
+                                    <input 
+                                        type="number" 
+                                        name="sync_frequency" 
+                                        id="sync_frequency"
+                                        value="{{ channel.sync_frequency or 24 }}"
+                                        min="1"
+                                        max="168"
+                                        class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                                    >
+                                </div>
+                                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                    How often to check for new videos (1-168 hours). Lower values use more resources.
+                                </p>
+                            </div>
+
+                            <!-- Priority Level -->
+                            <div class="mt-4">
+                                <label for="priority" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Priority Level
+                                </label>
+                                <select 
+                                    name="priority" 
+                                    id="priority"
+                                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md dark:bg-gray-700 dark:text-white"
+                                >
+                                    <option value="low" {% if channel.priority == 'low' %}selected{% endif %}>
+                                        Low - Infrequent updates
+                                    </option>
+                                    <option value="normal" {% if channel.priority == 'normal' %}selected{% endif %}>
+                                        Normal - Standard monitoring
+                                    </option>
+                                    <option value="high" {% if channel.priority == 'high' %}selected{% endif %}>
+                                        High - Frequent updates
+                                    </option>
+                                </select>
+                            </div>
+
+                            <!-- Max Videos to Process -->
+                            <div class="mt-4">
+                                <label for="max_videos" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Max Videos Per Sync
+                                </label>
+                                <div class="mt-1">
+                                    <input 
+                                        type="number" 
+                                        name="max_videos" 
+                                        id="max_videos"
+                                        value="{{ channel.max_videos or 10 }}"
+                                        min="1"
+                                        max="50"
+                                        class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                                    >
+                                </div>
+                                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                    Maximum number of videos to process in each sync (1-50).
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- AI Analysis Settings -->
+                        <div>
+                            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">
+                                AI Analysis Settings
+                            </h4>
+                            
+                            <!-- Enable AI Analysis -->
+                            <div class="flex items-start">
+                                <div class="flex items-center h-5">
+                                    <input 
+                                        id="enable_ai_analysis" 
+                                        name="enable_ai_analysis" 
+                                        type="checkbox" 
+                                        {% if channel.enable_ai_analysis %}checked{% endif %}
+                                        class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+                                    >
+                                </div>
+                                <div class="ml-3 text-sm">
+                                    <label for="enable_ai_analysis" class="font-medium text-gray-700 dark:text-gray-300">
+                                        Enable AI content analysis
+                                    </label>
+                                    <p class="text-gray-500 dark:text-gray-400">
+                                        Analyze video transcripts and generate content ideas using AI.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Analysis Focus -->
+                            <div class="mt-4">
+                                <label for="analysis_focus" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Analysis Focus
+                                </label>
+                                <select 
+                                    name="analysis_focus" 
+                                    id="analysis_focus"
+                                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md dark:bg-gray-700 dark:text-white"
+                                >
+                                    <option value="general" {% if channel.analysis_focus == 'general' %}selected{% endif %}>
+                                        General - All content types
+                                    </option>
+                                    <option value="educational" {% if channel.analysis_focus == 'educational' %}selected{% endif %}>
+                                        Educational - Focus on learning content
+                                    </option>
+                                    <option value="business" {% if channel.analysis_focus == 'business' %}selected{% endif %}>
+                                        Business - Focus on business insights
+                                    </option>
+                                    <option value="entertainment" {% if channel.analysis_focus == 'entertainment' %}selected{% endif %}>
+                                        Entertainment - Focus on engaging content
+                                    </option>
+                                    <option value="technical" {% if channel.analysis_focus == 'technical' %}selected{% endif %}>
+                                        Technical - Focus on technical content
+                                    </option>
+                                </select>
+                            </div>
+
+                            <!-- AI Model Selection -->
+                            <div class="mt-4">
+                                <label for="ai_model" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    AI Model
+                                </label>
+                                <select 
+                                    name="ai_model" 
+                                    id="ai_model"
+                                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md dark:bg-gray-700 dark:text-white"
+                                >
+                                    <option value="gpt-4o" {% if channel.ai_model == 'gpt-4o' %}selected{% endif %}>
+                                        GPT-4o - Best quality (higher cost)
+                                    </option>
+                                    <option value="gpt-4o-mini" {% if channel.ai_model == 'gpt-4o-mini' %}selected{% endif %}>
+                                        GPT-4o Mini - Good quality (lower cost)
+                                    </option>
+                                    <option value="claude-3-haiku" {% if channel.ai_model == 'claude-3-haiku' %}selected{% endif %}>
+                                        Claude 3 Haiku - Fast and efficient
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Notification Settings -->
+                        <div>
+                            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">
+                                Notification Settings
+                            </h4>
+
+                            <div class="space-y-4">
+                                <div class="flex items-start">
+                                    <div class="flex items-center h-5">
+                                        <input 
+                                            id="notify_new_videos" 
+                                            name="notify_new_videos" 
+                                            type="checkbox" 
+                                            {% if channel.notify_new_videos %}checked{% endif %}
+                                            class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+                                        >
+                                    </div>
+                                    <div class="ml-3 text-sm">
+                                        <label for="notify_new_videos" class="font-medium text-gray-700 dark:text-gray-300">
+                                            Notify when new videos are found
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-start">
+                                    <div class="flex items-center h-5">
+                                        <input 
+                                            id="notify_new_ideas" 
+                                            name="notify_new_ideas" 
+                                            type="checkbox" 
+                                            {% if channel.notify_new_ideas %}checked{% endif %}
+                                            class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+                                        >
+                                    </div>
+                                    <div class="ml-3 text-sm">
+                                        <label for="notify_new_ideas" class="font-medium text-gray-700 dark:text-gray-300">
+                                            Notify when new ideas are generated
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-start">
+                                    <div class="flex items-center h-5">
+                                        <input 
+                                            id="notify_errors" 
+                                            name="notify_errors" 
+                                            type="checkbox" 
+                                            {% if channel.notify_errors %}checked{% endif %}
+                                            class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+                                        >
+                                    </div>
+                                    <div class="ml-3 text-sm">
+                                        <label for="notify_errors" class="font-medium text-gray-700 dark:text-gray-300">
+                                            Notify when sync errors occur
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="pt-5 border-t border-gray-200 dark:border-gray-700">
+                    <div class="flex justify-between">
+                        <div class="flex space-x-3">
+                            <!-- Danger Zone -->
+                            <button 
+                                type="button"
+                                class="bg-red-600 hover:bg-red-700 text-white py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                onclick="confirmDelete()"
+                            >
+                                <i class="fas fa-trash mr-2"></i>
+                                Delete Channel
+                            </button>
+                        </div>
+                        <div class="flex space-x-3">
+                            <a href="/admin/channels/{{ channel.id }}" 
+                               class="bg-white dark:bg-gray-700 py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                Cancel
+                            </a>
+                            <button 
+                                type="submit" 
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+                            >
+                                <span id="submit-indicator" class="htmx-indicator">
+                                    <i class="fas fa-spinner fa-spin mr-2"></i>
+                                </span>
+                                <i class="fas fa-save mr-2"></i>
+                                Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
+        <div class="mt-3">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900">
+                <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+            </div>
+            <div class="mt-3 text-center">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Delete Channel</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        Are you sure you want to delete this channel? This will permanently remove:
+                    </p>
+                    <ul class="mt-2 text-sm text-gray-500 dark:text-gray-400 text-left">
+                        <li>• All video records</li>
+                        <li>• All generated ideas</li>
+                        <li>• All transcripts and analysis</li>
+                        <li>• All processing history</li>
+                    </ul>
+                    <p class="mt-2 text-sm text-red-600 dark:text-red-400">
+                        This action cannot be undone.
+                    </p>
+                </div>
+                <div class="items-center px-4 py-3 space-x-2">
+                    <button 
+                        id="confirm-delete"
+                        class="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        hx-delete="/admin/channels/{{ channel.id }}"
+                        hx-confirm="Type 'DELETE' to confirm"
+                    >
+                        Delete Channel
+                    </button>
+                    <button 
+                        id="cancel-delete"
+                        class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-white text-base font-medium rounded-md shadow-sm hover:bg-gray-400 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                        onclick="hideDeleteModal()"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function confirmDelete() {
+    document.getElementById('delete-modal').classList.remove('hidden');
+}
+
+function hideDeleteModal() {
+    document.getElementById('delete-modal').classList.add('hidden');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle successful form submission
+    document.body.addEventListener('htmx:afterRequest', function(event) {
+        if (event.detail.xhr.status === 200 && event.detail.target.id === 'form-container') {
+            // Show success message and redirect
+            showToast('Channel updated successfully!', 'success');
+            setTimeout(() => {
+                window.location.href = '/admin/channels/{{ channel.id }}';
+            }, 1500);
+        }
+        
+        // Handle successful deletion
+        if (event.detail.pathInfo.requestPath.includes('/admin/channels/{{ channel.id }}') && 
+            event.detail.xhr.status === 200 && 
+            event.detail.pathInfo.verb === 'DELETE') {
+            showToast('Channel deleted successfully!', 'success');
+            setTimeout(() => {
+                window.location.href = '/admin/channels';
+            }, 1500);
+        }
+    });
+
+    // Toggle AI settings based on enable_ai_analysis checkbox
+    const aiAnalysisCheckbox = document.getElementById('enable_ai_analysis');
+    const aiSettings = ['analysis_focus', 'ai_model'];
+    
+    function toggleAiSettings() {
+        aiSettings.forEach(settingId => {
+            const element = document.getElementById(settingId);
+            if (element) {
+                element.disabled = !aiAnalysisCheckbox.checked;
+                element.parentElement.style.opacity = aiAnalysisCheckbox.checked ? '1' : '0.5';
+            }
+        });
+    }
+    
+    if (aiAnalysisCheckbox) {
+        aiAnalysisCheckbox.addEventListener('change', toggleAiSettings);
+        toggleAiSettings(); // Initial state
+    }
+});
+</script>
+{% endblock %}

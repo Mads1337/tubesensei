@@ -8,7 +8,7 @@ from app.models.channel import Channel, ChannelStatus
 from app.models.video import Video, VideoStatus
 from app.models.idea import Idea
 from app.core.exceptions import NotFoundException, ValidationException
-from app.integrations.youtube_api import YouTubeAPI
+from app.integrations.youtube_api import YouTubeAPIClient
 
 
 class ChannelService:
@@ -16,7 +16,7 @@ class ChannelService:
     
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.youtube = YouTubeAPI()
+        self.youtube = YouTubeAPIClient()
     
     async def list_channels(
         self,
@@ -88,17 +88,95 @@ class ChannelService:
                 handle = youtube_channel_id.split("/@")[1].split("/")[0].split("?")[0]
                 youtube_channel_id = handle  # YouTube API will resolve this
         
-        # Validate YouTube channel exists
-        channel_info = await self.youtube.get_channel_info(youtube_channel_id)
-        if not channel_info:
-            raise ValidationException({
-                "youtube_channel_id": "Invalid YouTube channel ID"
-            })
+        # In development mode, create mock channel info
+        from app.core.config import get_settings
+        settings = get_settings()
+        
+        # Force real YouTube API even in DEBUG mode when API key is present
+        use_mock = settings.DEBUG and not settings.YOUTUBE_API_KEY
+        
+        if use_mock:
+            # Mock channel info for development
+            if "/@" in str(data.get("youtube_channel_id", "")):
+                handle = str(data.get("youtube_channel_id", "")).split("/@")[1].split("/")[0].split("?")[0]
+                channel_info = {
+                    "id": f"UC{handle[:22]}mock",  # Mock channel ID
+                    "snippet": {
+                        "title": handle.replace("_", " ").title(),
+                        "description": f"Mock channel for {handle}",
+                        "customUrl": f"@{handle}",
+                        "publishedAt": "2020-01-01T00:00:00Z",
+                        "thumbnails": {"default": {"url": "https://via.placeholder.com/88x88"}}
+                    },
+                    "statistics": {
+                        "viewCount": "1000",
+                        "subscriberCount": "100",
+                        "videoCount": "10"
+                    }
+                }
+                youtube_channel_id = channel_info["id"]  # Use the mock ID
+            elif "/channel/" in str(data.get("youtube_channel_id", "")):
+                channel_id = str(data.get("youtube_channel_id", "")).split("/channel/")[1].split("/")[0].split("?")[0]
+                channel_info = {
+                    "id": channel_id,
+                    "snippet": {
+                        "title": f"Mock Channel {channel_id[:8]}",
+                        "description": f"Mock channel for {channel_id}",
+                        "publishedAt": "2020-01-01T00:00:00Z",
+                        "thumbnails": {"default": {"url": "https://via.placeholder.com/88x88"}}
+                    },
+                    "statistics": {
+                        "viewCount": "1000",
+                        "subscriberCount": "100",
+                        "videoCount": "10"
+                    }
+                }
+                youtube_channel_id = channel_id
+            else:
+                # Direct channel ID
+                channel_info = {
+                    "id": youtube_channel_id,
+                    "snippet": {
+                        "title": f"Mock Channel {youtube_channel_id[:8]}",
+                        "description": f"Mock channel for {youtube_channel_id}",
+                        "publishedAt": "2020-01-01T00:00:00Z",
+                        "thumbnails": {"default": {"url": "https://via.placeholder.com/88x88"}}
+                    },
+                    "statistics": {
+                        "viewCount": "1000",
+                        "subscriberCount": "100", 
+                        "videoCount": "10"
+                    }
+                }
+        else:
+            # Validate YouTube channel exists in production
+            print(f"DEBUG: Calling YouTube API for channel: {youtube_channel_id}")
+            try:
+                # Check if this is a handle (extracted from @username URLs) or channel ID
+                if "/@" in str(data.get("youtube_channel_id", "")) or not youtube_channel_id.startswith("UC"):
+                    # This is a handle, use get_channel_by_handle
+                    print(f"DEBUG: Using get_channel_by_handle for: {youtube_channel_id}")
+                    channel_info = await self.youtube.get_channel_by_handle(youtube_channel_id)
+                else:
+                    # This is a channel ID, use get_channel_info
+                    print(f"DEBUG: Using get_channel_info for: {youtube_channel_id}")
+                    channel_info = await self.youtube.get_channel_info(youtube_channel_id)
+                
+                print(f"DEBUG: YouTube API returned: {channel_info}")
+                if not channel_info:
+                    raise ValidationException({
+                        "youtube_channel_id": "Invalid YouTube channel ID"
+                    })
+            except Exception as e:
+                print(f"DEBUG: YouTube API error: {e}")
+                raise
         
         # Check if already exists
+        # Handle both mock and real API responses
+        channel_id_key = "channel_id" if "channel_id" in channel_info else "id"
         existing = await self.db.execute(
             select(Channel).where(
-                Channel.youtube_channel_id == channel_info["id"]
+                Channel.youtube_channel_id == channel_info[channel_id_key]
             )
         )
         if existing.scalar_one_or_none():
@@ -106,22 +184,41 @@ class ChannelService:
                 "youtube_channel_id": "Channel already being monitored"
             })
         
-        # Create channel
-        channel = Channel(
-            name=channel_info["snippet"]["title"],
-            youtube_channel_id=channel_info["id"],
-            channel_url=f"https://youtube.com/channel/{channel_info['id']}",
-            description=channel_info["snippet"].get("description"),
-            subscriber_count=int(channel_info.get("statistics", {}).get("subscriberCount", 0)),
-            video_count=int(channel_info.get("statistics", {}).get("videoCount", 0)),
-            view_count=int(channel_info.get("statistics", {}).get("viewCount", 0)),
-            thumbnail_url=channel_info["snippet"].get("thumbnails", {}).get("default", {}).get("url"),
-            published_at=datetime.fromisoformat(channel_info["snippet"]["publishedAt"].replace("Z", "+00:00")),
-            country=channel_info["snippet"].get("country"),
-            custom_url=channel_info["snippet"].get("customUrl"),
-            status=ChannelStatus.ACTIVE,
-            processing_config=data.get("processing_config", {})
-        )
+        # Create channel - handle both mock and real API response formats
+        if use_mock:
+            # Mock format has nested snippet/statistics
+            channel = Channel(
+                name=channel_info["snippet"]["title"],
+                youtube_channel_id=channel_info["id"],
+                channel_url=f"https://youtube.com/channel/{channel_info['id']}",
+                description=channel_info["snippet"].get("description"),
+                subscriber_count=int(channel_info.get("statistics", {}).get("subscriberCount", 0)),
+                video_count=int(channel_info.get("statistics", {}).get("videoCount", 0)),
+                view_count=int(channel_info.get("statistics", {}).get("viewCount", 0)),
+                thumbnail_url=channel_info["snippet"].get("thumbnails", {}).get("default", {}).get("url"),
+                published_at=datetime.fromisoformat(channel_info["snippet"]["publishedAt"].replace("Z", "+00:00")),
+                country=channel_info["snippet"].get("country"),
+                custom_url=channel_info["snippet"].get("customUrl"),
+                status=ChannelStatus.ACTIVE,
+                processing_config=data.get("processing_config", {})
+            )
+        else:
+            # Real API format has flattened structure
+            channel = Channel(
+                name=channel_info["title"],
+                youtube_channel_id=channel_info["channel_id"],
+                channel_url=f"https://youtube.com/channel/{channel_info['channel_id']}",
+                description=channel_info.get("description"),
+                subscriber_count=int(channel_info.get("subscriber_count", 0)),
+                video_count=int(channel_info.get("video_count", 0)),
+                view_count=int(channel_info.get("view_count", 0)),
+                thumbnail_url=channel_info.get("thumbnails", {}).get("default", {}).get("url"),
+                published_at=datetime.fromisoformat(channel_info["published_at"].replace("Z", "+00:00")),
+                country=channel_info.get("country"),
+                custom_url=channel_info.get("custom_url"),
+                status=ChannelStatus.ACTIVE,
+                processing_config=data.get("processing_config", {})
+            )
         
         self.db.add(channel)
         await self.db.commit()
@@ -156,10 +253,32 @@ class ChannelService:
         """Manually sync channel data"""
         channel = await self.get_channel(channel_id)
         
-        # Get latest channel info
-        channel_info = await self.youtube.get_channel_info(
-            channel.youtube_channel_id
-        )
+        # Check if we're in DEBUG mode
+        from app.core.config import get_settings
+        settings = get_settings()
+        
+        # Force real YouTube API even in DEBUG mode when API key is present
+        use_mock = settings.DEBUG and not settings.YOUTUBE_API_KEY
+        
+        if use_mock:
+            # Mock channel sync for development
+            channel_info = {
+                "id": channel.youtube_channel_id,
+                "snippet": {
+                    "title": channel.name,
+                    "description": channel.description or f"Mock channel for {channel.name}",
+                },
+                "statistics": {
+                    "viewCount": str(channel.view_count + 100),  # Simulate some growth
+                    "subscriberCount": str(channel.subscriber_count + 10),
+                    "videoCount": str(channel.video_count + 2)
+                }
+            }
+        else:
+            # Get latest channel info from YouTube API
+            channel_info = await self.youtube.get_channel_info(
+                channel.youtube_channel_id
+            )
         
         if channel_info:
             channel.subscriber_count = int(channel_info.get("statistics", {}).get("subscriberCount", 0))
@@ -227,7 +346,7 @@ class ChannelService:
         
         # Create a Celery task for channel discovery
         task = celery_app.send_task(
-            "app.workers.processing_tasks.discover_channel_videos",
+            "app.workers.processing_tasks.discover_channel_videos_task",
             args=[str(channel_id)]
         )
         return task.id

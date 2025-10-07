@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+
+{% block title %}Add Channel - TubeSensei Admin{% endblock %}
+
+{% block page_title %}Add New Channel{% endblock %}
+{% block page_description %}Add a new YouTube channel for monitoring and analysis{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
+                Channel Information
+            </h3>
+            
+            <form 
+                hx-post="/admin/channels/add" 
+                hx-target="#error-message"
+                hx-swap="innerHTML"
+                hx-indicator="#submit-indicator"
+                class="space-y-6"
+                id="add-channel-form"
+            >
+                <!-- Error message container -->
+                <div id="error-message"></div>
+                
+                <div id="form-container">
+                    <!-- URL Input -->
+                    <div>
+                        <label for="url" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            YouTube Channel URL *
+                        </label>
+                        <div class="mt-1">
+                            <input 
+                                type="url" 
+                                name="url" 
+                                id="url"
+                                required
+                                placeholder="https://www.youtube.com/@channelname or https://www.youtube.com/channel/UCxxxxxxx"
+                                class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                                hx-get="/admin/channels/validate-url"
+                                hx-trigger="blur"
+                                hx-target="#url-validation"
+                                hx-swap="innerHTML"
+                            >
+                        </div>
+                        <div id="url-validation" class="mt-1 text-sm"></div>
+                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            Enter the full YouTube channel URL. We support both @handle and /channel/ formats.
+                        </p>
+                    </div>
+
+                    <!-- Name Input (optional, can be auto-filled from URL validation) -->
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Channel Name
+                        </label>
+                        <div class="mt-1">
+                            <input 
+                                type="text" 
+                                name="name" 
+                                id="name"
+                                placeholder="Channel name (will be auto-detected if left empty)"
+                                class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                            >
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            Leave empty to auto-detect from the channel URL.
+                        </p>
+                    </div>
+
+                    <!-- Description -->
+                    <div>
+                        <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Description
+                        </label>
+                        <div class="mt-1">
+                            <textarea 
+                                name="description" 
+                                id="description"
+                                rows="3"
+                                placeholder="Optional description for this channel..."
+                                class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                            ></textarea>
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            Optional description to help you remember why you're monitoring this channel.
+                        </p>
+                    </div>
+
+                    <!-- Monitoring Settings -->
+                    <div>
+                        <h4 class="text-md font-medium text-gray-900 dark:text-white mb-3">
+                            Monitoring Settings
+                        </h4>
+                        
+                        <!-- Auto Sync -->
+                        <div class="flex items-start">
+                            <div class="flex items-center h-5">
+                                <input 
+                                    id="auto_sync" 
+                                    name="auto_sync" 
+                                    type="checkbox" 
+                                    checked
+                                    class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+                                >
+                            </div>
+                            <div class="ml-3 text-sm">
+                                <label for="auto_sync" class="font-medium text-gray-700 dark:text-gray-300">
+                                    Enable automatic synchronization
+                                </label>
+                                <p class="text-gray-500 dark:text-gray-400">
+                                    Automatically check for new videos and update channel information.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Priority Level -->
+                        <div class="mt-4">
+                            <label for="priority" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Priority Level
+                            </label>
+                            <select 
+                                name="priority" 
+                                id="priority"
+                                class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md dark:bg-gray-700 dark:text-white"
+                            >
+                                <option value="normal">Normal - Standard monitoring</option>
+                                <option value="high">High - Frequent updates</option>
+                                <option value="low">Low - Infrequent updates</option>
+                            </select>
+                            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                Higher priority channels are checked more frequently for new content.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- AI Analysis Settings -->
+                    <div>
+                        <h4 class="text-md font-medium text-gray-900 dark:text-white mb-3">
+                            AI Analysis Settings
+                        </h4>
+                        
+                        <!-- Enable AI Analysis -->
+                        <div class="flex items-start">
+                            <div class="flex items-center h-5">
+                                <input 
+                                    id="enable_ai_analysis" 
+                                    name="enable_ai_analysis" 
+                                    type="checkbox" 
+                                    checked
+                                    class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+                                >
+                            </div>
+                            <div class="ml-3 text-sm">
+                                <label for="enable_ai_analysis" class="font-medium text-gray-700 dark:text-gray-300">
+                                    Enable AI content analysis
+                                </label>
+                                <p class="text-gray-500 dark:text-gray-400">
+                                    Analyze video transcripts and generate content ideas using AI.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Analysis Focus -->
+                        <div class="mt-4">
+                            <label for="analysis_focus" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Analysis Focus
+                            </label>
+                            <select 
+                                name="analysis_focus" 
+                                id="analysis_focus"
+                                class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md dark:bg-gray-700 dark:text-white"
+                            >
+                                <option value="general">General - All content types</option>
+                                <option value="educational">Educational - Focus on learning content</option>
+                                <option value="business">Business - Focus on business insights</option>
+                                <option value="entertainment">Entertainment - Focus on engaging content</option>
+                                <option value="technical">Technical - Focus on technical content</option>
+                            </select>
+                            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                Tailor AI analysis to focus on specific types of content ideas.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="pt-5">
+                    <div class="flex justify-end space-x-3">
+                        <a href="/admin/channels" 
+                           class="bg-white dark:bg-gray-700 py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                            Cancel
+                        </a>
+                        <button 
+                            type="submit" 
+                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+                        >
+                            <span id="submit-indicator" class="htmx-indicator">
+                                <i class="fas fa-spinner fa-spin mr-2"></i>
+                            </span>
+                            <i class="fas fa-plus mr-2"></i>
+                            Add Channel
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Preview Card (shown after URL validation) -->
+    <div id="channel-preview" class="mt-6 hidden">
+        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+            <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                <i class="fas fa-eye mr-2"></i>
+                Channel Preview
+            </h4>
+            <div id="preview-content">
+                <!-- Preview content will be loaded here via HTMX -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Show/hide preview based on URL validation
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+        if (event.detail.target.id === 'url-validation') {
+            const preview = document.getElementById('channel-preview');
+            const validation = document.getElementById('url-validation');
+            
+            if (validation.querySelector('.text-green-600')) {
+                preview.classList.remove('hidden');
+            } else {
+                preview.classList.add('hidden');
+            }
+        }
+    });
+
+    // Handle successful form submission
+    document.body.addEventListener('htmx:afterRequest', function(event) {
+        if (event.detail.xhr.status === 201) {
+            // Redirect to channels list on success
+            window.location.href = '/admin/channels/';
+        } else if (event.detail.xhr.status === 400) {
+            // Error is already displayed by HTMX in #error-message
+            // Optionally scroll to error message
+            document.getElementById('error-message').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    });
+});
+</script>
+{% endblock %}
