@@ -1,0 +1,117 @@
+<!-- Channel Table Partial -->
+<div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead class="bg-gray-50 dark:bg-gray-700">
+            <tr>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Channel
+                </th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Discovery Source
+                </th>
+                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Videos
+                </th>
+                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Relevant
+                </th>
+                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Rate
+                </th>
+                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    Status
+                </th>
+            </tr>
+        </thead>
+        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            {% for item in channels %}
+            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                <td class="px-4 py-3 whitespace-nowrap">
+                    <div class="flex items-center">
+                        {% if item.channel and item.channel.thumbnail_url %}
+                        <img src="{{ item.channel.thumbnail_url }}" alt=""
+                             class="w-10 h-10 rounded-full mr-3">
+                        {% else %}
+                        <div class="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center mr-3">
+                            <i class="fas fa-tv text-gray-400"></i>
+                        </div>
+                        {% endif %}
+                        <div>
+                            <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                <a href="https://youtube.com/channel/{{ item.channel.youtube_id if item.channel else '' }}"
+                                   target="_blank" class="hover:text-primary-600">
+                                    {{ item.channel.name if item.channel else 'Unknown' }}
+                                </a>
+                            </div>
+                            {% if item.channel and item.channel.subscriber_count %}
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                {{ "{:,}".format(item.channel.subscriber_count) }} subscribers
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                               {% if item.discovery_source.value == 'search' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300
+                               {% elif item.discovery_source.value == 'channel_expansion' %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300
+                               {% else %}bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300{% endif %}">
+                        {{ item.discovery_source.value | replace('_', ' ') | title }}
+                    </span>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-center text-sm text-gray-900 dark:text-white">
+                    {{ item.videos_discovered or 0 }}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-center text-sm text-green-600 dark:text-green-400">
+                    {{ item.videos_relevant or 0 }}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-center text-sm">
+                    {% if item.videos_discovered > 0 %}
+                    <span class="{% if item.relevance_rate >= 0.5 %}text-green-600{% elif item.relevance_rate >= 0.2 %}text-yellow-600{% else %}text-red-600{% endif %}">
+                        {{ "%.0f"|format(item.relevance_rate * 100) }}%
+                    </span>
+                    {% else %}
+                    <span class="text-gray-400">-</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-center">
+                    {% if item.limit_reached %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">
+                        <i class="fas fa-check mr-1"></i> Limit Reached
+                    </span>
+                    {% elif item.was_expanded %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                        <i class="fas fa-check mr-1"></i> Expanded
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                        Pending
+                    </span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if not channels %}
+    <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+        <i class="fas fa-tv text-4xl mb-2"></i>
+        <p>No channels discovered yet</p>
+    </div>
+    {% endif %}
+
+    <!-- Load More -->
+    {% if has_more %}
+    <div class="text-center py-4">
+        <button
+            class="px-4 py-2 text-sm text-primary-600 hover:text-primary-700 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-md"
+            hx-get="/admin/topic-campaigns/{{ campaign_id }}/channels?offset={{ offset + limit }}"
+            hx-target="#channels-container"
+            hx-swap="beforeend"
+        >
+            <i class="fas fa-plus mr-1"></i> Load More
+        </button>
+    </div>
+    {% endif %}
+</div>

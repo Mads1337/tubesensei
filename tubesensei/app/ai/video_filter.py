@@ -16,14 +16,14 @@ import json
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tubesensei.app.ai.llm_manager import LLMManager, ModelType
-from tubesensei.app.ai.prompt_templates import PromptTemplates, PromptType
-from tubesensei.app.ai.response_parser import ResponseParser
-from tubesensei.app.models.video import Video, VideoStatus
-from tubesensei.app.models.processing_job import ProcessingJob, JobType, JobStatus
-from tubesensei.app.database import get_db_context
+from app.ai.llm_manager import LLMManager, ModelType
+from app.ai.prompt_templates import PromptTemplates, PromptType
+from app.ai.response_parser import ResponseParser
+from app.models.video import Video, VideoStatus
+from app.models.processing_job import ProcessingJob, JobType, JobStatus
+from app.database import get_db_context
 import logging
-from tubesensei.app.config import settings
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 

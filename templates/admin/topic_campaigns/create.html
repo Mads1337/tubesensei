@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+
+{% block title %}Create Topic Campaign - TubeSensei Admin{% endblock %}
+
+{% block page_title %}Create Topic Campaign{% endblock %}
+{% block page_description %}Set up a new topic-based video discovery campaign{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <!-- Back Link -->
+    <div class="mb-6">
+        <a href="/admin/topic-campaigns" class="text-sm text-gray-500 dark:text-gray-400 hover:text-primary-600">
+            <i class="fas fa-arrow-left mr-1"></i> Back to Campaigns
+        </a>
+    </div>
+
+    <!-- Form Card -->
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-6">
+                <i class="fas fa-rocket mr-2 text-primary-600"></i>
+                New Topic Discovery Campaign
+            </h2>
+
+            <form id="create-campaign-form" method="POST" action="/admin/topic-campaigns" class="space-y-6">
+                <!-- Basic Info -->
+                <div class="space-y-4">
+                    <h3 class="text-sm font-medium text-gray-900 dark:text-white uppercase tracking-wider">
+                        Basic Information
+                    </h3>
+
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Campaign Name <span class="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            name="name"
+                            id="name"
+                            required
+                            placeholder="e.g., YouTube Shorts Money Making"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                        >
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">A memorable name for this campaign</p>
+                    </div>
+
+                    <div>
+                        <label for="topic" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Search Topic <span class="text-red-500">*</span>
+                        </label>
+                        <textarea
+                            name="topic"
+                            id="topic"
+                            rows="2"
+                            required
+                            placeholder="e.g., how to make money creating YouTube shorts with AI"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                        ></textarea>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">The topic to search for on YouTube. Be specific for better results.</p>
+                    </div>
+
+                    <div>
+                        <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Description
+                        </label>
+                        <textarea
+                            name="description"
+                            id="description"
+                            rows="3"
+                            placeholder="Optional description of what you're looking for..."
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                        ></textarea>
+                    </div>
+                </div>
+
+                <!-- Configuration -->
+                <div class="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4">
+                    <h3 class="text-sm font-medium text-gray-900 dark:text-white uppercase tracking-wider">
+                        Discovery Configuration
+                    </h3>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="total_video_limit" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Total Video Limit
+                            </label>
+                            <input
+                                type="number"
+                                name="total_video_limit"
+                                id="total_video_limit"
+                                value="3000"
+                                min="10"
+                                max="50000"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                            >
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Max videos to discover (10-50,000)</p>
+                        </div>
+
+                        <div>
+                            <label for="per_channel_limit" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Per-Channel Limit
+                            </label>
+                            <input
+                                type="number"
+                                name="per_channel_limit"
+                                id="per_channel_limit"
+                                value="5"
+                                min="1"
+                                max="100"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                            >
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Max videos from any single channel</p>
+                        </div>
+
+                        <div>
+                            <label for="search_limit" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Initial Search Limit
+                            </label>
+                            <input
+                                type="number"
+                                name="search_limit"
+                                id="search_limit"
+                                value="50"
+                                min="10"
+                                max="500"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                            >
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Results from initial search</p>
+                        </div>
+
+                        <div>
+                            <label for="similar_videos_depth" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Similar Videos Depth
+                            </label>
+                            <input
+                                type="number"
+                                name="similar_videos_depth"
+                                id="similar_videos_depth"
+                                value="2"
+                                min="0"
+                                max="5"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                            >
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Recursion depth for related videos</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="filter_threshold" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Relevance Threshold: <span id="threshold-value">0.7</span>
+                        </label>
+                        <input
+                            type="range"
+                            name="filter_threshold"
+                            id="filter_threshold"
+                            value="0.7"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            class="mt-2 w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                            oninput="document.getElementById('threshold-value').textContent = this.value"
+                        >
+                        <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            <span>More results</span>
+                            <span>Higher quality</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Agents -->
+                <div class="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-4">
+                    <h3 class="text-sm font-medium text-gray-900 dark:text-white uppercase tracking-wider">
+                        Discovery Agents
+                    </h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Select which discovery methods to enable</p>
+
+                    <div class="space-y-3">
+                        <label class="flex items-start">
+                            <input type="checkbox" name="agents" value="search" checked disabled
+                                   class="mt-1 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                            <span class="ml-3">
+                                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Search Agent</span>
+                                <span class="text-sm text-gray-500 dark:text-gray-400 block">YouTube search based on topic (Required)</span>
+                            </span>
+                        </label>
+
+                        <label class="flex items-start">
+                            <input type="checkbox" name="agents" value="channel_expansion" checked
+                                   class="mt-1 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                            <span class="ml-3">
+                                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Channel Expansion</span>
+                                <span class="text-sm text-gray-500 dark:text-gray-400 block">Get more videos from discovered channels</span>
+                            </span>
+                        </label>
+
+                        <label class="flex items-start">
+                            <input type="checkbox" name="agents" value="topic_filter" checked
+                                   class="mt-1 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                            <span class="ml-3">
+                                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">AI Topic Filter</span>
+                                <span class="text-sm text-gray-500 dark:text-gray-400 block">Filter videos by relevance using AI</span>
+                            </span>
+                        </label>
+
+                        <label class="flex items-start">
+                            <input type="checkbox" name="agents" value="similar_videos" checked
+                                   class="mt-1 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                            <span class="ml-3">
+                                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Similar Videos</span>
+                                <span class="text-sm text-gray-500 dark:text-gray-400 block">Find related videos via YouTube API</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="border-t border-gray-200 dark:border-gray-700 pt-6 flex justify-end space-x-3">
+                    <a href="/admin/topic-campaigns"
+                       class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                        Cancel
+                    </a>
+                    <button type="submit" name="action" value="save"
+                            class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-600 hover:bg-gray-700">
+                        <i class="fas fa-save mr-1"></i> Save as Draft
+                    </button>
+                    <button type="submit" name="action" value="start"
+                            class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
+                        <i class="fas fa-rocket mr-1"></i> Create & Start
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tips -->
+    <div class="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <i class="fas fa-lightbulb text-blue-400"></i>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-blue-800 dark:text-blue-300">Tips for better results</h3>
+                <div class="mt-2 text-sm text-blue-700 dark:text-blue-400">
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>Use specific, descriptive topics for more relevant results</li>
+                        <li>Start with a lower video limit and increase if needed</li>
+                        <li>A lower per-channel limit ensures diversity across creators</li>
+                        <li>Higher relevance threshold means fewer but more targeted videos</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('create-campaign-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+    const action = e.submitter.value;
+
+    // Collect enabled agents
+    const agents = [];
+    this.querySelectorAll('input[name="agents"]:checked').forEach(cb => {
+        agents.push(cb.value);
+    });
+
+    const data = {
+        name: formData.get('name'),
+        topic: formData.get('topic'),
+        description: formData.get('description') || null,
+        config: {
+            total_video_limit: parseInt(formData.get('total_video_limit')),
+            per_channel_limit: parseInt(formData.get('per_channel_limit')),
+            search_limit: parseInt(formData.get('search_limit')),
+            similar_videos_depth: parseInt(formData.get('similar_videos_depth')),
+            filter_threshold: parseFloat(formData.get('filter_threshold')),
+            enabled_agents: agents
+        }
+    };
+
+    try {
+        // Create campaign
+        const createResponse = await fetch('/api/v1/topic-campaigns/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (!createResponse.ok) {
+            const error = await createResponse.json();
+            throw new Error(error.detail || 'Failed to create campaign');
+        }
+
+        const campaign = await createResponse.json();
+
+        // If action is start, start the campaign
+        if (action === 'start') {
+            const startResponse = await fetch(`/api/v1/topic-campaigns/${campaign.id}/start`, {
+                method: 'POST'
+            });
+
+            if (!startResponse.ok) {
+                // Campaign created but failed to start
+                showToast('Campaign created but failed to start', 'warning');
+            }
+        }
+
+        // Redirect to campaign detail
+        window.location.href = `/admin/topic-campaigns/${campaign.id}`;
+
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+});
+</script>
+{% endblock %}

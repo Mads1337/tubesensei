@@ -25,7 +25,7 @@ from app.database import get_db as get_session, init_db, close_db
 # Import existing routers
 from app.api.admin import router as admin_router
 # from app.api.auth import router as auth_router
-# from app.api.v1 import router as api_v1_router
+from app.api.v1 import router as api_v1_router
 
 # Setup enhanced logging
 from app.utils.logging import setup_logging
@@ -197,6 +197,13 @@ if static_dir.exists():
 template_dir = Path(__file__).parent.parent.parent / settings.admin.TEMPLATE_DIR
 templates = Jinja2Templates(directory=str(template_dir))
 
+# Add get_flashed_messages stub for Flask compatibility in templates
+def get_flashed_messages(with_categories=False):
+    """Stub for Flask's get_flashed_messages - returns empty list."""
+    return []
+
+templates.env.globals['get_flashed_messages'] = get_flashed_messages
+
 # Setup exception handlers
 setup_exception_handlers(app)
 
@@ -218,12 +225,12 @@ if hasattr(app, 'state'):
         safe_log_warning("Admin router not yet implemented")
 
 # API v1 routes
-# if hasattr(app, 'state'):
-#     try:
-#         app.include_router(api_v1_router, prefix="/api/v1", tags=["api"])
-#         logger.info("API v1 router included")
-#     except ImportError:
-#         logger.warning("API v1 router not yet implemented")
+if hasattr(app, 'state'):
+    try:
+        app.include_router(api_v1_router, prefix="/api/v1", tags=["api"])
+        safe_log_info("API v1 router included")
+    except ImportError:
+        safe_log_warning("API v1 router not yet implemented")
 
 # Root endpoint
 @app.get("/", response_class=HTMLResponse)

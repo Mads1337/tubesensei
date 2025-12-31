@@ -1,0 +1,474 @@
+{% extends "base.html" %}
+
+{% block title %}{{ campaign.name }} - Topic Campaign - TubeSensei Admin{% endblock %}
+
+{% block page_title %}{{ campaign.name }}{% endblock %}
+{% block page_description %}Topic: {{ campaign.topic }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="campaignDashboard('{{ campaign.id }}')" x-init="init()">
+    <!-- Back Link & Header -->
+    <div class="flex justify-between items-start">
+        <div>
+            <a href="/admin/topic-campaigns" class="text-sm text-gray-500 dark:text-gray-400 hover:text-primary-600 mb-2 inline-block">
+                <i class="fas fa-arrow-left mr-1"></i> Back to Campaigns
+            </a>
+            <div class="flex items-center space-x-3">
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ campaign.name }}</h1>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+                           {% if campaign.status.value == 'running' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300
+                           {% elif campaign.status.value == 'completed' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                           {% elif campaign.status.value == 'paused' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300
+                           {% elif campaign.status.value == 'failed' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300
+                           {% elif campaign.status.value == 'cancelled' %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300
+                           {% else %}bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400{% endif %}"
+                      id="status-badge">
+                    {% if campaign.status.value == 'running' %}
+                    <span class="w-2 h-2 mr-2 bg-blue-400 rounded-full animate-pulse"></span>
+                    {% endif %}
+                    <span x-text="status || '{{ campaign.status.value | title }}'">{{ campaign.status.value | title }}</span>
+                </span>
+            </div>
+            <p class="mt-1 text-gray-600 dark:text-gray-400">
+                <i class="fas fa-search mr-1"></i> {{ campaign.topic }}
+            </p>
+        </div>
+
+        <!-- Control Buttons -->
+        <div class="flex space-x-2" id="campaign-controls">
+            {% if campaign.status.value == 'draft' %}
+            <button onclick="startCampaign('{{ campaign.id }}')"
+                    class="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700">
+                <i class="fas fa-play mr-1"></i> Start Campaign
+            </button>
+            {% elif campaign.status.value == 'running' %}
+            <button onclick="pauseCampaign('{{ campaign.id }}')"
+                    class="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600">
+                <i class="fas fa-pause mr-1"></i> Pause
+            </button>
+            <button onclick="cancelCampaign('{{ campaign.id }}')"
+                    class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                <i class="fas fa-stop mr-1"></i> Cancel
+            </button>
+            {% elif campaign.status.value == 'paused' %}
+            <button onclick="resumeCampaign('{{ campaign.id }}')"
+                    class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+                <i class="fas fa-play mr-1"></i> Resume
+            </button>
+            <button onclick="cancelCampaign('{{ campaign.id }}')"
+                    class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                <i class="fas fa-stop mr-1"></i> Cancel
+            </button>
+            {% endif %}
+            {% if campaign.status.value in ['completed', 'cancelled'] %}
+            <a href="/api/v1/topic-campaigns/{{ campaign.id }}/export?format=json"
+               class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">
+                <i class="fas fa-download mr-1"></i> Export JSON
+            </a>
+            <a href="/api/v1/topic-campaigns/{{ campaign.id }}/export?format=csv"
+               class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">
+                <i class="fas fa-file-csv mr-1"></i> Export CSV
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Progress Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-medium text-gray-900 dark:text-white">Campaign Progress</h2>
+            <span class="text-2xl font-bold text-primary-600" x-text="progress.toFixed(1) + '%'">{{ "%.1f"|format(campaign.progress_percent) }}%</span>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 mb-6">
+            <div class="bg-primary-600 h-4 rounded-full transition-all duration-500"
+                 :style="'width: ' + progress + '%'"
+                 style="width: {{ campaign.progress_percent }}%"></div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div class="text-2xl font-bold text-gray-900 dark:text-white" x-text="stats.videos_discovered.toLocaleString()">{{ "{:,}".format(campaign.total_videos_discovered or 0) }}</div>
+                <div class="text-sm text-gray-500 dark:text-gray-400">Videos Found</div>
+            </div>
+            <div class="text-center p-3 bg-green-50 dark:bg-green-900/30 rounded-lg">
+                <div class="text-2xl font-bold text-green-600 dark:text-green-400" x-text="stats.videos_relevant.toLocaleString()">{{ "{:,}".format(campaign.total_videos_relevant or 0) }}</div>
+                <div class="text-sm text-gray-500 dark:text-gray-400">Relevant</div>
+            </div>
+            <div class="text-center p-3 bg-red-50 dark:bg-red-900/30 rounded-lg">
+                <div class="text-2xl font-bold text-red-600 dark:text-red-400" x-text="stats.videos_filtered.toLocaleString()">{{ "{:,}".format(campaign.total_videos_filtered or 0) }}</div>
+                <div class="text-sm text-gray-500 dark:text-gray-400">Filtered Out</div>
+            </div>
+            <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div class="text-2xl font-bold text-gray-900 dark:text-white" x-text="stats.channels_explored">{{ campaign.total_channels_explored or 0 }}</div>
+                <div class="text-sm text-gray-500 dark:text-gray-400">Channels</div>
+            </div>
+            <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div class="text-2xl font-bold text-gray-900 dark:text-white" x-text="stats.api_calls">{{ campaign.api_calls_made or 0 }}</div>
+                <div class="text-sm text-gray-500 dark:text-gray-400">API Calls</div>
+            </div>
+            <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div class="text-2xl font-bold text-gray-900 dark:text-white" x-text="stats.llm_calls">{{ campaign.llm_calls_made or 0 }}</div>
+                <div class="text-sm text-gray-500 dark:text-gray-400">LLM Calls</div>
+            </div>
+        </div>
+
+        <!-- Filter Acceptance Rate -->
+        <div class="mt-4 flex items-center justify-between text-sm">
+            <span class="text-gray-500 dark:text-gray-400">Filter Acceptance Rate</span>
+            <span class="font-medium text-gray-900 dark:text-white" x-text="(stats.filter_acceptance_rate * 100).toFixed(1) + '%'">
+                {% if campaign.total_videos_discovered > 0 %}
+                {{ "%.1f"|format((campaign.total_videos_relevant / campaign.total_videos_discovered * 100) if campaign.total_videos_discovered else 0) }}%
+                {% else %}
+                0.0%
+                {% endif %}
+            </span>
+        </div>
+    </div>
+
+    <!-- Agent Status Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {% include "admin/topic_campaigns/partials/agent_card.html" with context %}
+    </div>
+
+    <!-- Tabs -->
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+        <div class="border-b border-gray-200 dark:border-gray-700">
+            <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs" x-data="{ activeTab: 'videos' }">
+                <button
+                    @click="activeTab = 'videos'"
+                    :class="activeTab === 'videos' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+                >
+                    <i class="fas fa-video mr-2"></i>
+                    Discovered Videos
+                </button>
+                <button
+                    @click="activeTab = 'channels'"
+                    :class="activeTab === 'channels' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+                >
+                    <i class="fas fa-tv mr-2"></i>
+                    Channels
+                </button>
+                <button
+                    @click="activeTab = 'agents'"
+                    :class="activeTab === 'agents' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+                >
+                    <i class="fas fa-robot mr-2"></i>
+                    Agent Runs
+                </button>
+                <button
+                    @click="activeTab = 'config'"
+                    :class="activeTab === 'config' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+                >
+                    <i class="fas fa-cog mr-2"></i>
+                    Configuration
+                </button>
+
+                <!-- Tab Content -->
+                <div class="p-6 w-full">
+                    <!-- Videos Tab -->
+                    <div x-show="activeTab === 'videos'" class="w-full">
+                        <div class="flex justify-between items-center mb-4">
+                            <div class="flex space-x-2">
+                                <button onclick="loadVideos('{{ campaign.id }}', false)"
+                                        class="px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                    All Videos
+                                </button>
+                                <button onclick="loadVideos('{{ campaign.id }}', true)"
+                                        class="px-3 py-1 text-sm rounded bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800">
+                                    Relevant Only
+                                </button>
+                            </div>
+                            <span class="text-sm text-gray-500">
+                                <span x-text="stats.videos_discovered">{{ campaign.total_videos_discovered or 0 }}</span> total
+                            </span>
+                        </div>
+                        <div id="videos-container"
+                             hx-get="/admin/topic-campaigns/{{ campaign.id }}/videos"
+                             hx-trigger="load"
+                             hx-swap="innerHTML">
+                            <div class="animate-pulse space-y-3">
+                                {% for i in range(5) %}
+                                <div class="flex space-x-4">
+                                    <div class="bg-gray-200 dark:bg-gray-600 rounded w-24 h-16"></div>
+                                    <div class="flex-1 space-y-2">
+                                        <div class="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4"></div>
+                                        <div class="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2"></div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Channels Tab -->
+                    <div x-show="activeTab === 'channels'" class="w-full">
+                        <div id="channels-container"
+                             hx-get="/admin/topic-campaigns/{{ campaign.id }}/channels"
+                             hx-trigger="load delay:500ms"
+                             hx-swap="innerHTML">
+                            <div class="animate-pulse space-y-3">
+                                {% for i in range(5) %}
+                                <div class="flex items-center space-x-4">
+                                    <div class="bg-gray-200 dark:bg-gray-600 rounded-full w-10 h-10"></div>
+                                    <div class="flex-1 space-y-2">
+                                        <div class="h-4 bg-gray-200 dark:bg-gray-600 rounded w-1/2"></div>
+                                        <div class="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/4"></div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Agent Runs Tab -->
+                    <div x-show="activeTab === 'agents'" class="w-full">
+                        <div id="agent-runs-container"
+                             hx-get="/admin/topic-campaigns/{{ campaign.id }}/agent-runs"
+                             hx-trigger="load delay:500ms"
+                             hx-swap="innerHTML">
+                            <div class="animate-pulse space-y-3">
+                                {% for i in range(5) %}
+                                <div class="h-16 bg-gray-200 dark:bg-gray-600 rounded"></div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Config Tab -->
+                    <div x-show="activeTab === 'config'" class="w-full">
+                        <div class="grid grid-cols-2 gap-6">
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase mb-3">Discovery Limits</h4>
+                                <dl class="space-y-2">
+                                    <div class="flex justify-between">
+                                        <dt class="text-sm text-gray-600 dark:text-gray-400">Total Video Limit</dt>
+                                        <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ campaign.config.get('total_video_limit', 3000) }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-sm text-gray-600 dark:text-gray-400">Per-Channel Limit</dt>
+                                        <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ campaign.config.get('per_channel_limit', 5) }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-sm text-gray-600 dark:text-gray-400">Search Limit</dt>
+                                        <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ campaign.config.get('search_limit', 50) }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-sm text-gray-600 dark:text-gray-400">Similar Videos Depth</dt>
+                                        <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ campaign.config.get('similar_videos_depth', 2) }}</dd>
+                                    </div>
+                                </dl>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase mb-3">Filtering</h4>
+                                <dl class="space-y-2">
+                                    <div class="flex justify-between">
+                                        <dt class="text-sm text-gray-600 dark:text-gray-400">Relevance Threshold</dt>
+                                        <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ campaign.config.get('filter_threshold', 0.7) }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt class="text-sm text-gray-600 dark:text-gray-400 mb-1">Enabled Agents</dt>
+                                        <dd class="flex flex-wrap gap-1">
+                                            {% for agent in campaign.config.get('enabled_agents', ['search', 'channel_expansion', 'topic_filter', 'similar_videos']) %}
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-300">
+                                                {{ agent | replace('_', ' ') | title }}
+                                            </span>
+                                            {% endfor %}
+                                        </dd>
+                                    </div>
+                                </dl>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                            <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase mb-3">Timestamps</h4>
+                            <dl class="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <dt class="text-gray-600 dark:text-gray-400">Created</dt>
+                                    <dd class="font-medium text-gray-900 dark:text-white">{{ campaign.created_at.strftime('%B %d, %Y at %I:%M %p') }}</dd>
+                                </div>
+                                {% if campaign.started_at %}
+                                <div>
+                                    <dt class="text-gray-600 dark:text-gray-400">Started</dt>
+                                    <dd class="font-medium text-gray-900 dark:text-white">{{ campaign.started_at.strftime('%B %d, %Y at %I:%M %p') }}</dd>
+                                </div>
+                                {% endif %}
+                                {% if campaign.completed_at %}
+                                <div>
+                                    <dt class="text-gray-600 dark:text-gray-400">Completed</dt>
+                                    <dd class="font-medium text-gray-900 dark:text-white">{{ campaign.completed_at.strftime('%B %d, %Y at %I:%M %p') }}</dd>
+                                </div>
+                                {% endif %}
+                                {% if campaign.execution_time_seconds %}
+                                <div>
+                                    <dt class="text-gray-600 dark:text-gray-400">Duration</dt>
+                                    <dd class="font-medium text-gray-900 dark:text-white">{{ "%.1f"|format(campaign.execution_time_seconds / 60) }} minutes</dd>
+                                </div>
+                                {% endif %}
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Error Display -->
+    {% if campaign.error_message %}
+    <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <i class="fas fa-exclamation-circle text-red-400"></i>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-red-800 dark:text-red-300">Campaign Error</h3>
+                <p class="mt-1 text-sm text-red-700 dark:text-red-400">{{ campaign.error_message }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function campaignDashboard(campaignId) {
+    return {
+        campaignId: campaignId,
+        status: '{{ campaign.status.value | title }}',
+        progress: {{ campaign.progress_percent or 0 }},
+        stats: {
+            videos_discovered: {{ campaign.total_videos_discovered or 0 }},
+            videos_relevant: {{ campaign.total_videos_relevant or 0 }},
+            videos_filtered: {{ campaign.total_videos_filtered or 0 }},
+            channels_explored: {{ campaign.total_channels_explored or 0 }},
+            api_calls: {{ campaign.api_calls_made or 0 }},
+            llm_calls: {{ campaign.llm_calls_made or 0 }},
+            filter_acceptance_rate: {{ (campaign.total_videos_relevant / campaign.total_videos_discovered) if campaign.total_videos_discovered else 0 }}
+        },
+        pollInterval: null,
+
+        init() {
+            if (this.status === 'Running') {
+                this.startPolling();
+            }
+        },
+
+        startPolling() {
+            this.pollInterval = setInterval(() => this.fetchProgress(), 5000);
+        },
+
+        stopPolling() {
+            if (this.pollInterval) {
+                clearInterval(this.pollInterval);
+                this.pollInterval = null;
+            }
+        },
+
+        async fetchProgress() {
+            try {
+                const response = await fetch(`/api/v1/topic-campaigns/${this.campaignId}/progress`);
+                if (response.ok) {
+                    const data = await response.json();
+                    this.updateFromProgress(data);
+                }
+            } catch (error) {
+                console.error('Failed to fetch progress:', error);
+            }
+        },
+
+        updateFromProgress(data) {
+            this.status = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+            this.progress = data.progress_percent;
+            this.stats.videos_discovered = data.videos_discovered;
+            this.stats.videos_relevant = data.videos_relevant;
+            this.stats.videos_filtered = data.videos_filtered;
+            this.stats.channels_explored = data.channels_explored;
+            this.stats.api_calls = data.api_calls;
+            this.stats.llm_calls = data.llm_calls;
+            this.stats.filter_acceptance_rate = data.filter_acceptance_rate;
+
+            // Stop polling if campaign is no longer running
+            if (!['running', 'Running'].includes(data.status)) {
+                this.stopPolling();
+                // Refresh the page to update controls
+                window.location.reload();
+            }
+        }
+    };
+}
+
+async function startCampaign(id) {
+    try {
+        const response = await fetch(`/api/v1/topic-campaigns/${id}/start`, { method: 'POST' });
+        if (response.ok) {
+            showToast('Campaign started!', 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            const error = await response.json();
+            showToast(error.detail || 'Failed to start campaign', 'error');
+        }
+    } catch (e) {
+        showToast('Failed to start campaign', 'error');
+    }
+}
+
+async function pauseCampaign(id) {
+    try {
+        const response = await fetch(`/api/v1/topic-campaigns/${id}/pause`, { method: 'POST' });
+        if (response.ok) {
+            showToast('Campaign paused', 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            const error = await response.json();
+            showToast(error.detail || 'Failed to pause campaign', 'error');
+        }
+    } catch (e) {
+        showToast('Failed to pause campaign', 'error');
+    }
+}
+
+async function resumeCampaign(id) {
+    try {
+        const response = await fetch(`/api/v1/topic-campaigns/${id}/resume`, { method: 'POST' });
+        if (response.ok) {
+            showToast('Campaign resumed!', 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            const error = await response.json();
+            showToast(error.detail || 'Failed to resume campaign', 'error');
+        }
+    } catch (e) {
+        showToast('Failed to resume campaign', 'error');
+    }
+}
+
+async function cancelCampaign(id) {
+    if (!confirm('Are you sure you want to cancel this campaign? This cannot be undone.')) {
+        return;
+    }
+    try {
+        const response = await fetch(`/api/v1/topic-campaigns/${id}/cancel`, { method: 'POST' });
+        if (response.ok) {
+            showToast('Campaign cancelled', 'warning');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            const error = await response.json();
+            showToast(error.detail || 'Failed to cancel campaign', 'error');
+        }
+    } catch (e) {
+        showToast('Failed to cancel campaign', 'error');
+    }
+}
+
+function loadVideos(campaignId, relevantOnly) {
+    htmx.ajax('GET', `/admin/topic-campaigns/${campaignId}/videos?relevant_only=${relevantOnly}`, '#videos-container');
+}
+</script>
+{% endblock %}

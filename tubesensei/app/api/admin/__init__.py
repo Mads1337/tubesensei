@@ -7,10 +7,11 @@ from pathlib import Path
 
 # from .dashboard import router as dashboard_router  # Temporarily disabled
 from .channels import router as channels_router
+from .topic_campaigns import router as topic_campaigns_router
 from .template_helpers import get_template_context
 
 # Set up templates
-template_dir = Path(__file__).parent.parent.parent.parent / "templates"
+template_dir = Path(__file__).parent.parent.parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(template_dir))
 
 # Create main admin router
@@ -39,3 +40,4 @@ async def admin_jobs(request: Request):
 # Include sub-routers
 # router.include_router(dashboard_router)  # Temporarily disabled
 router.include_router(channels_router)
+router.include_router(topic_campaigns_router)

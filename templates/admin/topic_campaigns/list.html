@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}Topic Campaigns - TubeSensei Admin{% endblock %}
+
+{% block page_title %}Topic Discovery Campaigns{% endblock %}
+{% block page_description %}Discover YouTube videos based on topics{% endblock %}
+
+{% block content %}
+<div class="topic-campaigns-container">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Topic Discovery Campaigns</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Automatically discover relevant YouTube videos based on topics
+            </p>
+        </div>
+        <a href="/admin/topic-campaigns/create"
+           class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+            <i class="fas fa-plus mr-2"></i>
+            New Campaign
+        </a>
+    </div>
+
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-rocket text-2xl text-primary-600"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Active Campaigns</dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">{{ stats.running or 0 }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-check-circle text-2xl text-green-600"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Completed</dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">{{ stats.completed or 0 }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-video text-2xl text-blue-600"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Videos Found</dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">{{ "{:,}".format(stats.total_videos or 0) }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-filter text-2xl text-purple-600"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Relevant Videos</dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">{{ "{:,}".format(stats.relevant_videos or 0) }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-6">
+        <form class="flex gap-4" hx-get="/admin/topic-campaigns" hx-target="#campaigns-list" hx-swap="innerHTML">
+            <div class="flex-1">
+                <input
+                    type="text"
+                    name="search"
+                    placeholder="Search campaigns..."
+                    value="{{ filters.search or '' }}"
+                    class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                    hx-get="/admin/topic-campaigns"
+                    hx-trigger="keyup changed delay:500ms"
+                    hx-target="#campaigns-list"
+                    hx-swap="innerHTML"
+                >
+            </div>
+            <select
+                name="status"
+                class="block px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                hx-get="/admin/topic-campaigns"
+                hx-trigger="change"
+                hx-target="#campaigns-list"
+                hx-swap="innerHTML"
+            >
+                <option value="">All Status</option>
+                <option value="draft" {% if filters.status == 'draft' %}selected{% endif %}>Draft</option>
+                <option value="running" {% if filters.status == 'running' %}selected{% endif %}>Running</option>
+                <option value="paused" {% if filters.status == 'paused' %}selected{% endif %}>Paused</option>
+                <option value="completed" {% if filters.status == 'completed' %}selected{% endif %}>Completed</option>
+                <option value="failed" {% if filters.status == 'failed' %}selected{% endif %}>Failed</option>
+                <option value="cancelled" {% if filters.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+            </select>
+            <button type="submit" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                Apply Filters
+            </button>
+        </form>
+    </div>
+
+    <!-- Campaigns List -->
+    <div id="campaigns-list" class="space-y-4">
+        {% for campaign in campaigns %}
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+            <div class="p-6">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center space-x-3">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                                <a href="/admin/topic-campaigns/{{ campaign.id }}" class="hover:text-primary-600">
+                                    {{ campaign.name }}
+                                </a>
+                            </h3>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                       {% if campaign.status.value == 'running' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300
+                                       {% elif campaign.status.value == 'completed' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                                       {% elif campaign.status.value == 'paused' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300
+                                       {% elif campaign.status.value == 'failed' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300
+                                       {% elif campaign.status.value == 'cancelled' %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300
+                                       {% else %}bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400{% endif %}">
+                                {% if campaign.status.value == 'running' %}
+                                <span class="w-2 h-2 mr-1 bg-blue-400 rounded-full animate-pulse"></span>
+                                {% endif %}
+                                {{ campaign.status.value | title }}
+                            </span>
+                        </div>
+                        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                            <i class="fas fa-search mr-1"></i>
+                            {{ campaign.topic }}
+                        </p>
+                        {% if campaign.description %}
+                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-500">
+                            {{ campaign.description[:150] }}{% if campaign.description|length > 150 %}...{% endif %}
+                        </p>
+                        {% endif %}
+                    </div>
+                    <div class="flex space-x-2 ml-4">
+                        {% if campaign.status.value == 'draft' %}
+                        <button
+                            class="px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
+                            hx-post="/api/v1/topic-campaigns/{{ campaign.id }}/start"
+                            hx-target="#campaigns-list"
+                            hx-swap="outerHTML"
+                        >
+                            <i class="fas fa-play mr-1"></i> Start
+                        </button>
+                        {% elif campaign.status.value == 'running' %}
+                        <button
+                            class="px-3 py-1 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600"
+                            hx-post="/api/v1/topic-campaigns/{{ campaign.id }}/pause"
+                            hx-target="#campaigns-list"
+                            hx-swap="outerHTML"
+                        >
+                            <i class="fas fa-pause mr-1"></i> Pause
+                        </button>
+                        {% elif campaign.status.value == 'paused' %}
+                        <button
+                            class="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+                            hx-post="/api/v1/topic-campaigns/{{ campaign.id }}/resume"
+                            hx-target="#campaigns-list"
+                            hx-swap="outerHTML"
+                        >
+                            <i class="fas fa-play mr-1"></i> Resume
+                        </button>
+                        {% endif %}
+                        <a href="/admin/topic-campaigns/{{ campaign.id }}"
+                           class="px-3 py-1 text-sm bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
+                            <i class="fas fa-eye mr-1"></i> View
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                {% if campaign.status.value in ['running', 'paused'] %}
+                <div class="mt-4">
+                    <div class="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                        <span>Progress</span>
+                        <span>{{ "%.1f"|format(campaign.progress_percent) }}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div class="bg-primary-600 h-2 rounded-full transition-all duration-500" style="width: {{ campaign.progress_percent }}%"></div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Stats Row -->
+                <div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                    <div class="text-gray-600 dark:text-gray-400">
+                        <span class="font-medium">Videos Found:</span>
+                        <span class="text-gray-900 dark:text-white">{{ "{:,}".format(campaign.total_videos_discovered or 0) }}</span>
+                    </div>
+                    <div class="text-gray-600 dark:text-gray-400">
+                        <span class="font-medium">Relevant:</span>
+                        <span class="text-green-600 dark:text-green-400">{{ "{:,}".format(campaign.total_videos_relevant or 0) }}</span>
+                    </div>
+                    <div class="text-gray-600 dark:text-gray-400">
+                        <span class="font-medium">Channels:</span>
+                        <span class="text-gray-900 dark:text-white">{{ campaign.total_channels_explored or 0 }}</span>
+                    </div>
+                    <div class="text-gray-600 dark:text-gray-400">
+                        <span class="font-medium">Created:</span>
+                        <span class="text-gray-900 dark:text-white">{{ campaign.created_at.strftime('%b %d, %Y') }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% if not campaigns %}
+        <div class="text-center py-12 bg-white dark:bg-gray-800 rounded-lg">
+            <div class="text-gray-400 dark:text-gray-600 mb-4">
+                <i class="fas fa-compass text-6xl"></i>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No campaigns found</h3>
+            <p class="text-gray-600 dark:text-gray-400 mb-4">
+                {% if filters.search or filters.status %}
+                    Try adjusting your filters or search terms.
+                {% else %}
+                    Start discovering YouTube videos by creating your first campaign.
+                {% endif %}
+            </p>
+            <a href="/admin/topic-campaigns/create"
+               class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700">
+                <i class="fas fa-plus mr-2"></i>
+                Create Your First Campaign
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 sm:px-6 mt-6 rounded-lg">
+        <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div>
+                <p class="text-sm text-gray-700 dark:text-gray-300">
+                    Showing page <span class="font-medium">{{ page }}</span> of <span class="font-medium">{{ total_pages }}</span>
+                    (<span class="font-medium">{{ total }}</span> total campaigns)
+                </p>
+            </div>
+            <div>
+                <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                    {% if page > 1 %}
+                    <a href="?page={{ page - 1 }}{% if filters.search %}&search={{ filters.search }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}"
+                       class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                    {% endif %}
+                    {% if page < total_pages %}
+                    <a href="?page={{ page + 1 }}{% if filters.search %}&search={{ filters.search }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}"
+                       class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                    {% endif %}
+                </nav>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh running campaigns every 10 seconds
+setInterval(function() {
+    if (!document.hidden) {
+        const runningCampaigns = document.querySelectorAll('[data-status="running"]');
+        if (runningCampaigns.length > 0) {
+            htmx.trigger('#campaigns-list', 'refresh');
+        }
+    }
+}, 10000);
+</script>
+{% endblock %}

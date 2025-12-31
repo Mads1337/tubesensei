@@ -507,7 +507,127 @@ class YouTubeAPIClient:
                 break
         
         return videos[:max_results]
-    
+
+    async def get_related_videos(
+        self,
+        video_id: str,
+        max_results: int = 25
+    ) -> List[Dict[str, Any]]:
+        """
+        Get related/similar videos for a given video.
+
+        Uses the YouTube Search API with relatedToVideoId parameter.
+        Note: This parameter is deprecated but may still work.
+        Falls back to title-based search if relatedToVideoId fails.
+
+        Args:
+            video_id: YouTube video ID to find related videos for
+            max_results: Maximum results to return (default 25)
+
+        Returns:
+            List of related video information dictionaries
+        """
+        videos = []
+
+        try:
+            # First try with relatedToVideoId (deprecated but may work)
+            request_params = {
+                'part': 'snippet',
+                'relatedToVideoId': video_id,
+                'type': 'video',
+                'maxResults': min(50, max_results),
+            }
+
+            try:
+                response = await self._execute_api_call(
+                    YouTubeAPIOperation.SEARCH_LIST,
+                    self.youtube.search().list,
+                    **request_params
+                )
+
+                for item in response.get('items', []):
+                    # Skip the source video itself
+                    related_video_id = item['id'].get('videoId')
+                    if related_video_id and related_video_id != video_id:
+                        videos.append({
+                            'video_id': related_video_id,
+                            'title': item['snippet']['title'],
+                            'description': item['snippet']['description'],
+                            'channel_id': item['snippet']['channelId'],
+                            'channel_title': item['snippet']['channelTitle'],
+                            'published_at': item['snippet']['publishedAt'],
+                            'thumbnails': item['snippet']['thumbnails'],
+                            'discovery_method': 'related_to_video_id',
+                        })
+
+                if videos:
+                    logger.debug(f"Found {len(videos)} related videos using relatedToVideoId")
+                    return videos[:max_results]
+
+            except Exception as e:
+                logger.debug(f"relatedToVideoId failed (deprecated): {e}")
+                # Fall through to title-based search
+
+            # Fallback: Search using the source video's title
+            # First get the source video's details
+            video_details = await self.get_video_details([video_id])
+            if not video_details:
+                logger.warning(f"Could not get details for video {video_id}")
+                return []
+
+            source_video = video_details[0]
+            source_title = source_video.get('title', '')
+
+            if not source_title:
+                return []
+
+            # Extract key terms from title (remove common words)
+            import re
+            # Remove special characters and split
+            words = re.findall(r'\b[a-zA-Z]{3,}\b', source_title.lower())
+            # Remove very common words
+            stop_words = {'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'her', 'was', 'one', 'our', 'out', 'how', 'what', 'with', 'this', 'that', 'from', 'they', 'will', 'have', 'has', 'been', 'were'}
+            key_terms = [w for w in words if w not in stop_words][:5]
+
+            if not key_terms:
+                return []
+
+            search_query = ' '.join(key_terms)
+            logger.debug(f"Searching for related videos with query: {search_query}")
+
+            # Search for videos with similar title
+            response = await self._execute_api_call(
+                YouTubeAPIOperation.SEARCH_LIST,
+                self.youtube.search().list,
+                part='snippet',
+                q=search_query,
+                type='video',
+                maxResults=min(50, max_results + 5),  # Get a few extra to filter
+                order='relevance'
+            )
+
+            for item in response.get('items', []):
+                related_video_id = item['id'].get('videoId')
+                # Skip the source video itself
+                if related_video_id and related_video_id != video_id:
+                    videos.append({
+                        'video_id': related_video_id,
+                        'title': item['snippet']['title'],
+                        'description': item['snippet']['description'],
+                        'channel_id': item['snippet']['channelId'],
+                        'channel_title': item['snippet']['channelTitle'],
+                        'published_at': item['snippet']['publishedAt'],
+                        'thumbnails': item['snippet']['thumbnails'],
+                        'discovery_method': 'title_search',
+                    })
+
+            logger.debug(f"Found {len(videos)} related videos using title search")
+            return videos[:max_results]
+
+        except Exception as e:
+            logger.error(f"Error getting related videos for {video_id}: {e}")
+            return []
+
     def _parse_duration(self, duration: str) -> int:
         """
         Parse ISO 8601 duration to seconds.

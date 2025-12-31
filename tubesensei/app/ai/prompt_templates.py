@@ -16,6 +16,7 @@ from typing import Dict, Any, Optional, Set
 class PromptType(Enum):
     """Types of prompts for different processing stages."""
     VIDEO_FILTER = "video_filter"
+    TOPIC_FILTER = "topic_filter"  # For topic-based campaign filtering
     IDEA_EXTRACTION = "idea_extraction"
     IDEA_CATEGORIZATION = "idea_categorization"
     QUALITY_ASSESSMENT = "quality_assessment"
@@ -28,7 +29,9 @@ class PromptTemplates:
     # System prompts for different tasks
     SYSTEM_PROMPTS = {
         PromptType.VIDEO_FILTER: """You are an expert content analyst specializing in identifying valuable business and technology content from YouTube videos. Your task is to evaluate whether videos contain actionable business ideas, innovative concepts, or valuable insights.""",
-        
+
+        PromptType.TOPIC_FILTER: """You are an expert content analyst specializing in determining YouTube video relevance to specific topics. Your task is to analyze video metadata (title, description, channel) and determine if the video is relevant to the given topic. Be thorough but fair - a video can be tangentially related and still be relevant. Focus on the core subject matter, not production quality or popularity.""",
+
         PromptType.IDEA_EXTRACTION: """You are a business analyst expert at identifying and extracting actionable business ideas from content. Focus on ideas that are specific, implementable, and have clear value propositions.""",
         
         PromptType.IDEA_CATEGORIZATION: """You are an expert at categorizing business ideas by industry, complexity, and potential. Provide structured categorization with clear reasoning.""",
@@ -63,6 +66,37 @@ Respond in JSON format:
     "reasoning": "Brief explanation",
     "detected_topics": ["topic1", "topic2"],
     "predicted_idea_count": 0-10
+}}
+""",
+
+        PromptType.TOPIC_FILTER: """
+Analyze this YouTube video to determine if it is relevant to the specified topic.
+
+Topic: {topic}
+
+Video Title: {title}
+Video Description: {description}
+Channel Name: {channel_name}
+
+Evaluate the video's relevance by considering:
+1. Direct keyword matches between the topic and video metadata
+2. Semantic similarity - does the video discuss the same concepts?
+3. Contextual relevance - would someone interested in the topic find this valuable?
+4. How closely does the content align with the core subject?
+
+Alignment categories:
+- "exact": Directly about the topic, primary focus
+- "related": Strongly related, covers similar themes
+- "tangential": Loosely connected, might be useful
+- "unrelated": No meaningful connection to the topic
+
+Respond ONLY with valid JSON (no markdown, no explanation outside JSON):
+{{
+    "is_relevant": true or false,
+    "relevance_score": 0.0 to 1.0,
+    "reasoning": "Brief explanation of why the video is or isn't relevant (max 100 words)",
+    "matched_keywords": ["keyword1", "keyword2"],
+    "topic_alignment": "exact" or "related" or "tangential" or "unrelated"
 }}
 """,
 

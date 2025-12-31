@@ -17,7 +17,7 @@ from enum import Enum
 from typing import Dict, Optional, Type, Union, Set
 from datetime import datetime, timedelta, timezone
 
-from tubesensei.app.config import settings
+from app.config import settings
 
 
 logger = logging.getLogger(__name__)

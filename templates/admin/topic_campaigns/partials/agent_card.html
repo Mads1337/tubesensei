@@ -1,0 +1,98 @@
+<!-- Agent Status Cards -->
+<!-- Search Agent -->
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+    <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center">
+            <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg mr-3">
+                <i class="fas fa-search text-blue-600 dark:text-blue-400"></i>
+            </div>
+            <div>
+                <h3 class="text-sm font-medium text-gray-900 dark:text-white">Search Agent</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">YouTube Search</p>
+            </div>
+        </div>
+        <span class="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400" id="search-agent-status">
+            {% if 'search' in campaign.config.get('enabled_agents', []) %}Enabled{% else %}Disabled{% endif %}
+        </span>
+    </div>
+    <div class="mt-3 text-sm text-gray-600 dark:text-gray-400">
+        <div class="flex justify-between">
+            <span>Videos Found</span>
+            <span class="font-medium" id="search-agent-count">-</span>
+        </div>
+    </div>
+</div>
+
+<!-- Channel Expansion Agent -->
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+    <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center">
+            <div class="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg mr-3">
+                <i class="fas fa-tv text-purple-600 dark:text-purple-400"></i>
+            </div>
+            <div>
+                <h3 class="text-sm font-medium text-gray-900 dark:text-white">Channel Expansion</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Explore Channels</p>
+            </div>
+        </div>
+        <span class="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400" id="channel-agent-status">
+            {% if 'channel_expansion' in campaign.config.get('enabled_agents', []) %}Enabled{% else %}Disabled{% endif %}
+        </span>
+    </div>
+    <div class="mt-3 text-sm text-gray-600 dark:text-gray-400">
+        <div class="flex justify-between">
+            <span>Channels Explored</span>
+            <span class="font-medium">{{ campaign.total_channels_explored or 0 }}</span>
+        </div>
+    </div>
+</div>
+
+<!-- Topic Filter Agent -->
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+    <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center">
+            <div class="p-2 bg-green-100 dark:bg-green-900 rounded-lg mr-3">
+                <i class="fas fa-filter text-green-600 dark:text-green-400"></i>
+            </div>
+            <div>
+                <h3 class="text-sm font-medium text-gray-900 dark:text-white">Topic Filter</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">AI Relevance</p>
+            </div>
+        </div>
+        <span class="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400" id="filter-agent-status">
+            {% if 'topic_filter' in campaign.config.get('enabled_agents', []) %}Enabled{% else %}Disabled{% endif %}
+        </span>
+    </div>
+    <div class="mt-3 text-sm text-gray-600 dark:text-gray-400">
+        <div class="flex justify-between">
+            <span>Filtered</span>
+            <span class="font-medium text-green-600">{{ campaign.total_videos_relevant or 0 }}</span>
+            <span>/</span>
+            <span class="font-medium text-red-600">{{ campaign.total_videos_filtered or 0 }}</span>
+        </div>
+    </div>
+</div>
+
+<!-- Similar Videos Agent -->
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+    <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center">
+            <div class="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg mr-3">
+                <i class="fas fa-random text-orange-600 dark:text-orange-400"></i>
+            </div>
+            <div>
+                <h3 class="text-sm font-medium text-gray-900 dark:text-white">Similar Videos</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Related Content</p>
+            </div>
+        </div>
+        <span class="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400" id="similar-agent-status">
+            {% if 'similar_videos' in campaign.config.get('enabled_agents', []) %}Enabled{% else %}Disabled{% endif %}
+        </span>
+    </div>
+    <div class="mt-3 text-sm text-gray-600 dark:text-gray-400">
+        <div class="flex justify-between">
+            <span>Depth</span>
+            <span class="font-medium">{{ campaign.config.get('similar_videos_depth', 2) }}</span>
+        </div>
+    </div>
+</div>

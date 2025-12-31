@@ -1,0 +1,100 @@
+<!-- Video Table Partial -->
+<div class="space-y-3">
+    {% for item in videos %}
+    <div class="flex items-start space-x-4 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+        <!-- Thumbnail -->
+        <div class="flex-shrink-0">
+            {% if item.video and item.video.thumbnail_url %}
+            <img src="{{ item.video.thumbnail_url }}" alt="{{ item.video.title }}"
+                 class="w-32 h-20 object-cover rounded">
+            {% else %}
+            <div class="w-32 h-20 bg-gray-200 dark:bg-gray-600 rounded flex items-center justify-center">
+                <i class="fas fa-video text-gray-400"></i>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1 min-w-0">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h4 class="text-sm font-medium text-gray-900 dark:text-white truncate">
+                        <a href="https://youtube.com/watch?v={{ item.video.youtube_id if item.video else item.youtube_id }}"
+                           target="_blank" class="hover:text-primary-600">
+                            {{ item.video.title if item.video else item.title }}
+                        </a>
+                    </h4>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {{ item.video.channel_name if item.video else 'Unknown Channel' }}
+                    </p>
+                </div>
+
+                <!-- Relevance Badge -->
+                {% if item.is_topic_relevant is not none %}
+                <span class="flex-shrink-0 ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                           {% if item.is_topic_relevant %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                           {% else %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300{% endif %}">
+                    {% if item.is_topic_relevant %}
+                    <i class="fas fa-check mr-1"></i> Relevant
+                    {% else %}
+                    <i class="fas fa-times mr-1"></i> Filtered
+                    {% endif %}
+                </span>
+                {% else %}
+                <span class="flex-shrink-0 ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                    <i class="fas fa-clock mr-1"></i> Pending
+                </span>
+                {% endif %}
+            </div>
+
+            <!-- Stats Row -->
+            <div class="flex items-center space-x-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
+                <span>
+                    <i class="fas fa-eye mr-1"></i>
+                    {{ "{:,}".format(item.video.view_count if item.video and item.video.view_count else 0) }} views
+                </span>
+                <span>
+                    <i class="fas fa-clock mr-1"></i>
+                    {{ (item.video.duration_seconds // 60) if item.video and item.video.duration_seconds else 0 }}:{{ "%02d"|format((item.video.duration_seconds % 60) if item.video and item.video.duration_seconds else 0) }}
+                </span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-700">
+                    {{ item.discovery_source.value | replace('_', ' ') | title if item.discovery_source else 'Unknown' }}
+                </span>
+                {% if item.relevance_score %}
+                <span>
+                    Score: {{ "%.2f"|format(item.relevance_score) }}
+                </span>
+                {% endif %}
+            </div>
+
+            <!-- Filter Reasoning -->
+            {% if item.filter_reasoning %}
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 italic line-clamp-2">
+                {{ item.filter_reasoning }}
+            </p>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+    {% if not videos %}
+    <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+        <i class="fas fa-video-slash text-4xl mb-2"></i>
+        <p>No videos found</p>
+    </div>
+    {% endif %}
+
+    <!-- Load More -->
+    {% if has_more %}
+    <div class="text-center py-4">
+        <button
+            class="px-4 py-2 text-sm text-primary-600 hover:text-primary-700 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-md"
+            hx-get="/admin/topic-campaigns/{{ campaign_id }}/videos?offset={{ offset + limit }}&relevant_only={{ relevant_only }}"
+            hx-target="#videos-container"
+            hx-swap="beforeend"
+        >
+            <i class="fas fa-plus mr-1"></i> Load More
+        </button>
+    </div>
+    {% endif %}
+</div>

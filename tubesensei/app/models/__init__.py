@@ -6,6 +6,10 @@ from app.models.processing_job import ProcessingJob, JobType, JobStatus, JobPrio
 from app.models.processing_session import ProcessingSession, SessionType, SessionStatus
 from app.models.user import User, UserRole, UserStatus
 from app.models.idea import Idea, IdeaStatus, IdeaPriority
+from app.models.topic_campaign import TopicCampaign, CampaignStatus
+from app.models.campaign_video import CampaignVideo, DiscoverySource
+from app.models.campaign_channel import CampaignChannel
+from app.models.agent_run import AgentRun, AgentType, AgentRunStatus
 
 __all__ = [
     "BaseModel",
@@ -29,4 +33,12 @@ __all__ = [
     "Idea",
     "IdeaStatus",
     "IdeaPriority",
+    "TopicCampaign",
+    "CampaignStatus",
+    "CampaignVideo",
+    "DiscoverySource",
+    "CampaignChannel",
+    "AgentRun",
+    "AgentType",
+    "AgentRunStatus",
 ]

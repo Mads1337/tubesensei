@@ -26,8 +26,8 @@ except ImportError:
 from litellm import Router, completion
 import litellm
 
-from tubesensei.app.config import settings
-from tubesensei.app.ai.retry_strategy import RetryStrategy
+from app.config import settings
+from app.ai.retry_strategy import RetryStrategy
 
 
 logger = logging.getLogger(__name__)

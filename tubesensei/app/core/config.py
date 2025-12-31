@@ -185,6 +185,68 @@ class AdminSettings(BaseSettings):
         case_sensitive = True
 
 
+class TopicDiscoverySettings(BaseSettings):
+    """Topic Discovery campaign settings"""
+    # Default limits
+    DEFAULT_VIDEO_LIMIT: int = Field(
+        default=3000,
+        description="Default maximum total videos to discover per campaign"
+    )
+    DEFAULT_CHANNEL_LIMIT: int = Field(
+        default=5,
+        description="Default maximum videos from any single channel"
+    )
+    SEARCH_LIMIT: int = Field(
+        default=50,
+        description="Maximum results from initial YouTube search"
+    )
+    SIMILAR_DEPTH: int = Field(
+        default=2,
+        description="Default recursion depth for similar videos discovery"
+    )
+
+    # AI Filtering
+    FILTER_THRESHOLD: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Default minimum relevance score for topic filter"
+    )
+    FILTER_BATCH_SIZE: int = Field(
+        default=10,
+        description="Number of videos to filter in a single LLM call"
+    )
+    FILTER_MODEL: str = Field(
+        default="gpt-4o-mini",
+        description="LLM model to use for topic filtering"
+    )
+
+    # Rate Limiting
+    RATE_LIMIT: float = Field(
+        default=0.5,
+        description="Minimum seconds between YouTube API calls"
+    )
+    MAX_CONCURRENT_AGENTS: int = Field(
+        default=3,
+        description="Maximum number of agents running concurrently"
+    )
+
+    # Celery task settings
+    TASK_SOFT_TIME_LIMIT: int = Field(
+        default=3600,
+        description="Soft time limit for campaign tasks (seconds)"
+    )
+    TASK_TIME_LIMIT: int = Field(
+        default=7200,
+        description="Hard time limit for campaign tasks (seconds)"
+    )
+
+    class Config:
+        env_file = ".env"
+        env_prefix = "TOPIC_"
+        case_sensitive = True
+
+
 class EnhancedSettings(BaseSettings):
     """Enhanced settings combining all configurations"""
     # Application settings
@@ -300,7 +362,13 @@ class EnhancedSettings(BaseSettings):
         default_factory=AdminSettings,
         description="Admin interface configuration"
     )
-    
+
+    # Topic Discovery settings
+    topic_discovery: TopicDiscoverySettings = Field(
+        default_factory=TopicDiscoverySettings,
+        description="Topic discovery campaign configuration"
+    )
+
     # YouTube API settings (from existing config)
     YOUTUBE_API_KEY: str = Field(
         default="",
