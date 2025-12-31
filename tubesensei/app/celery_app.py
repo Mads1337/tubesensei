@@ -11,7 +11,10 @@ def create_celery_app() -> Celery:
         "tubesensei",
         broker=settings.CELERY_BROKER_URL,
         backend=settings.CELERY_RESULT_BACKEND,
-        include=["app.workers.processing_tasks"]
+        include=[
+            "app.workers.processing_tasks",
+            "app.workers.topic_discovery_tasks"
+        ]
     )
     
     # Basic configuration
@@ -45,6 +48,15 @@ def create_celery_app() -> Celery:
         },
         "app.workers.processing_tasks.sync_channel_metadata_task": {
             "queue": "metadata"
+        },
+        "app.workers.topic_discovery_tasks.run_topic_campaign_task": {
+            "queue": "campaigns"
+        },
+        "app.workers.topic_discovery_tasks.process_campaign_transcripts_task": {
+            "queue": "transcripts"
+        },
+        "app.workers.topic_discovery_tasks.extract_campaign_ideas_task": {
+            "queue": "batch"
         },
     }
     

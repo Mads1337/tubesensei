@@ -64,3 +64,29 @@ async def init_db():
 async def close_db():
     await engine.dispose()
     logger.info("Database connections closed")
+
+
+def create_worker_session_factory():
+    """
+    Create a new async session factory for Celery workers.
+
+    This is needed because async engines are tied to the event loop
+    they were created in. Celery workers create their own event loops,
+    so they need their own engines.
+    """
+    worker_engine = create_async_engine(
+        settings.DATABASE_URL,
+        pool_size=5,  # Smaller pool for workers
+        max_overflow=5,
+        pool_timeout=settings.DATABASE_POOL_TIMEOUT,
+        pool_pre_ping=True,
+        echo=settings.DEBUG,
+    )
+
+    return async_sessionmaker(
+        worker_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    ), worker_engine

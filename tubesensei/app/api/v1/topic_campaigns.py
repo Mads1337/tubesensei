@@ -30,6 +30,11 @@ from app.schemas.topic_campaign import (
     CampaignStatus,
     AgentType,
 )
+from app.workers.topic_discovery_tasks import (
+    run_topic_campaign_task,
+    process_campaign_transcripts_task,
+    extract_campaign_ideas_task,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,12 +85,15 @@ async def list_campaigns(
         offset=offset,
     )
 
+    # Get actual total count for proper pagination
+    total = await service.count_campaigns(status=db_status)
+
     return TopicCampaignListResponse(
         items=campaigns,
-        total=len(campaigns),  # TODO: Implement proper count
+        total=total,
         limit=limit,
         offset=offset,
-        has_more=len(campaigns) == limit,
+        has_more=(offset + len(campaigns)) < total,
     )
 
 
@@ -164,9 +172,8 @@ async def start_campaign(
     try:
         campaign = await service.start_campaign(campaign_id)
 
-        # Queue background task (or Celery task in production)
-        # For now, we just return success
-        # In production, use: task = run_topic_campaign_task.delay(str(campaign_id))
+        # Queue the Celery task to run the campaign
+        task = run_topic_campaign_task.delay(str(campaign_id), resume=False)
 
         return CampaignActionResponse(
             campaign_id=campaign_id,
@@ -174,7 +181,7 @@ async def start_campaign(
             success=True,
             status=CampaignStatus(campaign.status.value),
             message="Campaign started successfully",
-            task_id=None,  # Would be Celery task ID
+            task_id=task.id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -210,12 +217,17 @@ async def resume_campaign(
     """Resume a paused campaign."""
     try:
         campaign = await service.resume_campaign(campaign_id)
+
+        # Queue the Celery task to resume the campaign
+        task = run_topic_campaign_task.delay(str(campaign_id), resume=True)
+
         return CampaignActionResponse(
             campaign_id=campaign_id,
             action="resume",
             success=True,
             status=CampaignStatus(campaign.status.value),
             message="Campaign resumed successfully",
+            task_id=task.id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -236,6 +248,41 @@ async def cancel_campaign(
             success=True,
             status=CampaignStatus(campaign.status.value),
             message="Campaign cancelled successfully",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{campaign_id}/retry", response_model=CampaignActionResponse)
+async def retry_campaign(
+    campaign_id: UUID,
+    background_tasks: BackgroundTasks,
+    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
+    service: TopicDiscoveryService = Depends(get_topic_discovery_service),
+):
+    """
+    Retry a failed campaign.
+
+    Resets the error state and immediately starts the campaign again.
+    Only campaigns in FAILED status can be retried.
+    """
+    try:
+        # Reset the failed campaign to DRAFT status
+        campaign = await service.retry_campaign(campaign_id)
+
+        # Start the campaign immediately
+        campaign = await service.start_campaign(campaign_id)
+
+        # Queue the Celery task to run the campaign
+        task = run_topic_campaign_task.delay(str(campaign_id), resume=False)
+
+        return CampaignActionResponse(
+            campaign_id=campaign_id,
+            action="retry",
+            success=True,
+            status=CampaignStatus(campaign.status.value),
+            message="Campaign retried successfully and started",
+            task_id=task.id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -375,8 +422,8 @@ async def process_campaign_transcripts(
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    # TODO: Implement bulk transcript processing
-    # For now, return a placeholder response
+    # Queue the Celery task for bulk transcript processing
+    task = process_campaign_transcripts_task.delay(str(campaign_id))
 
     return CampaignActionResponse(
         campaign_id=campaign_id,
@@ -384,6 +431,7 @@ async def process_campaign_transcripts(
         success=True,
         status=CampaignStatus(campaign.status.value),
         message="Transcript processing queued",
+        task_id=task.id,
     )
 
 
@@ -403,8 +451,8 @@ async def extract_campaign_ideas(
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    # TODO: Implement bulk idea extraction
-    # For now, return a placeholder response
+    # Queue the Celery task for bulk idea extraction
+    task = extract_campaign_ideas_task.delay(str(campaign_id))
 
     return CampaignActionResponse(
         campaign_id=campaign_id,
@@ -412,4 +460,5 @@ async def extract_campaign_ideas(
         success=True,
         status=CampaignStatus(campaign.status.value),
         message="Idea extraction queued",
+        task_id=task.id,
     )

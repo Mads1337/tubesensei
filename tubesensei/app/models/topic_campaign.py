@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 import enum
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from app.models.base import BaseModel
 
@@ -221,6 +221,14 @@ class TopicCampaign(BaseModel):
         comment="User who created this campaign"
     )
 
+    # Celery task tracking
+    celery_task_id = Column(
+        String(255),
+        nullable=True,
+        index=True,
+        comment="ID of the currently running Celery task"
+    )
+
     # Relationships
     videos = relationship(
         "CampaignVideo",
@@ -408,6 +416,31 @@ class TopicCampaign(BaseModel):
                 100.0
             )
 
+    def calculate_eta(self) -> Optional[datetime]:
+        """Calculate estimated completion time based on current rate."""
+        if not self.started_at or self.total_videos_relevant == 0:
+            return None
+
+        elapsed = (datetime.now(timezone.utc) - self.started_at).total_seconds()
+        if elapsed <= 0:
+            return None
+
+        rate = self.total_videos_relevant / elapsed  # videos per second
+        if rate <= 0:
+            return None
+
+        remaining = self.total_video_limit - self.total_videos_relevant
+        if remaining <= 0:
+            return None
+
+        seconds_remaining = remaining / rate
+
+        return datetime.now(timezone.utc) + timedelta(seconds=seconds_remaining)
+
+    def update_eta(self) -> None:
+        """Update the estimated_completion_at field."""
+        self.estimated_completion_at = self.calculate_eta()
+
     def increment_discovered(self, count: int = 1) -> None:
         """Increment discovered videos count."""
         self.total_videos_discovered += count
@@ -416,6 +449,7 @@ class TopicCampaign(BaseModel):
         """Increment relevant videos count and update progress."""
         self.total_videos_relevant += count
         self.update_progress()
+        self.update_eta()
 
     def increment_filtered(self, count: int = 1) -> None:
         """Increment filtered out videos count."""
@@ -462,6 +496,8 @@ class TopicCampaign(BaseModel):
 
     def get_summary(self) -> Dict[str, Any]:
         """Get campaign summary for API responses."""
+        # Calculate current ETA if running
+        eta = self.estimated_completion_at or self.calculate_eta()
         return {
             "id": str(self.id),
             "name": self.name,
@@ -479,6 +515,7 @@ class TopicCampaign(BaseModel):
             "duration_seconds": self.duration_seconds,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "estimated_completion_at": eta.isoformat() if eta else None,
             "error_count": self.error_count,
             "config": self.config,
         }

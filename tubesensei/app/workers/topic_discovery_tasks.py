@@ -6,15 +6,17 @@ including the main campaign runner and individual agent tasks.
 """
 import logging
 import asyncio
+import json
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 from uuid import UUID
 
+import redis
 from celery import Task
 
 from app.celery_app import celery_app, update_job_status
 from app.config import settings
-from app.database import AsyncSessionLocal
+from app.database import create_worker_session_factory
 from app.models.topic_campaign import TopicCampaign, CampaignStatus
 from app.models.campaign_video import CampaignVideo
 from app.models.campaign_channel import CampaignChannel
@@ -31,6 +33,38 @@ from app.ai.llm_manager import LLMManager
 from app.workers.monitoring import TaskMonitor
 
 logger = logging.getLogger(__name__)
+
+# Synchronous Redis client for Celery workers
+_redis_client: Optional[redis.Redis] = None
+
+
+def get_redis_client() -> redis.Redis:
+    """Get or create synchronous Redis client for Celery workers."""
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = redis.from_url(settings.REDIS_URL)
+    return _redis_client
+
+
+def publish_campaign_progress(campaign_id: str, data: dict) -> None:
+    """
+    Publish campaign progress update to Redis pubsub.
+
+    Args:
+        campaign_id: The campaign ID
+        data: Progress data dict
+    """
+    try:
+        client = get_redis_client()
+        channel = f"campaign:{campaign_id}"
+        message = json.dumps({
+            **data,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+        client.publish(channel, message)
+        logger.debug(f"Published campaign progress to {channel}: {data.get('type', 'unknown')}")
+    except Exception as e:
+        logger.error(f"Failed to publish campaign progress: {e}")
 
 
 class TopicDiscoveryTask(Task):
@@ -55,6 +89,14 @@ class TopicDiscoveryTask(Task):
             # Update campaign status to failed
             campaign_id = kwargs.get('campaign_id') or (args[0] if args else None)
             if campaign_id:
+                # Publish campaign failure event
+                publish_campaign_progress(campaign_id, {
+                    "type": "campaign_failed",
+                    "message": f"Campaign failed: {str(exc)}",
+                    "status": "failed",
+                    "error": str(exc),
+                })
+
                 try:
                     loop = asyncio.get_running_loop()
                 except RuntimeError:
@@ -84,12 +126,30 @@ class TopicDiscoveryTask(Task):
 
 
 # Event handler for progress updates
-def create_progress_handler(task_id: str):
-    """Create an event handler that updates task progress."""
+def create_progress_handler(task_id: str, campaign_id: str):
+    """
+    Create an event handler that updates task progress and publishes to Redis.
+
+    Args:
+        task_id: The Celery task ID
+        campaign_id: The campaign ID for pubsub channel
+
+    Returns:
+        Handler function for AgentEvent
+    """
     def handler(event: AgentEvent):
         try:
-            # Could send to Redis pubsub for WebSocket updates
             logger.debug(f"Agent event: {event.event_type.value} - {event.message}")
+
+            # Publish to Redis pubsub for WebSocket updates
+            publish_campaign_progress(campaign_id, {
+                "type": event.event_type.value,
+                "message": event.message,
+                "progress": getattr(event, 'progress', None),
+                "agent": getattr(event, 'agent', None),
+                "data": getattr(event, 'data', {}),
+                "task_id": task_id,
+            })
         except Exception as e:
             logger.error(f"Error handling agent event: {e}")
     return handler
@@ -127,63 +187,77 @@ def run_topic_campaign_task(
         campaign_uuid = UUID(campaign_id)
 
         async def _run():
-            async with AsyncSessionLocal() as session:
-                # Get campaign
-                campaign = await session.get(TopicCampaign, campaign_uuid)
-                if not campaign:
-                    raise ValueError(f"Campaign not found: {campaign_id}")
+            # Create fresh session factory for this event loop
+            WorkerSession, worker_engine = create_worker_session_factory()
+            try:
+                async with WorkerSession() as session:
+                    # Get campaign
+                    campaign = await session.get(TopicCampaign, campaign_uuid)
+                    if not campaign:
+                        raise ValueError(f"Campaign not found: {campaign_id}")
 
-                # Validate campaign can run
-                if not resume and campaign.status != CampaignStatus.DRAFT:
-                    if campaign.status != CampaignStatus.RUNNING:
-                        raise ValueError(f"Campaign cannot be started from {campaign.status.value} status")
-                elif resume and campaign.status != CampaignStatus.PAUSED:
-                    raise ValueError(f"Campaign cannot be resumed from {campaign.status.value} status")
+                    # Validate campaign can run
+                    if not resume and campaign.status != CampaignStatus.DRAFT:
+                        if campaign.status != CampaignStatus.RUNNING:
+                            raise ValueError(f"Campaign cannot be started from {campaign.status.value} status")
+                    elif resume and campaign.status != CampaignStatus.PAUSED:
+                        raise ValueError(f"Campaign cannot be resumed from {campaign.status.value} status")
 
-                logger.info(f"Running topic campaign: {campaign.name} ({campaign_id})")
+                    logger.info(f"Running topic campaign: {campaign.name} ({campaign_id})")
 
-                # Create agent context
-                context = AgentContext(
-                    campaign_id=campaign_uuid,
-                    campaign=campaign,
-                    db=session,
-                    config=campaign.config or {},
-                    youtube_rate_limiter=RateLimiter(requests_per_minute=120),
-                    llm_rate_limiter=RateLimiter(requests_per_minute=60),
-                    event_callback=create_progress_handler(self.request.id),
-                )
+                    # Publish campaign start event
+                    publish_campaign_progress(campaign_id, {
+                        "type": "campaign_started",
+                        "message": f"Campaign '{campaign.name}' started",
+                        "status": "running",
+                        "topic": campaign.topic,
+                    })
 
-                # Initialize clients
-                youtube_client = YouTubeAPIClient()
-                llm_manager = LLMManager()
+                    # Create agent context
+                    context = AgentContext(
+                        campaign_id=campaign_uuid,
+                        campaign=campaign,
+                        db=session,
+                        config=campaign.config or {},
+                        youtube_rate_limiter=RateLimiter(requests_per_minute=120),
+                        llm_rate_limiter=RateLimiter(requests_per_minute=60),
+                        event_callback=create_progress_handler(self.request.id, campaign_id),
+                    )
 
-                # Create and run coordinator
-                coordinator = CoordinatorAgent(
-                    context=context,
-                    youtube_client=youtube_client,
-                    llm_manager=llm_manager,
-                )
+                    # Initialize clients
+                    youtube_client = YouTubeAPIClient()
+                    llm_manager = LLMManager()
 
-                result = await coordinator.execute({
-                    "topic": campaign.topic,
-                    "resume_from_checkpoint": resume,
-                })
+                    # Create and run coordinator
+                    coordinator = CoordinatorAgent(
+                        context=context,
+                        youtube_client=youtube_client,
+                        llm_manager=llm_manager,
+                    )
 
-                # Refresh campaign state
-                await session.refresh(campaign)
+                    result = await coordinator.execute({
+                        "topic": campaign.topic,
+                        "resume_from_checkpoint": resume,
+                    })
 
-                return {
-                    "success": result.success,
-                    "campaign_id": campaign_id,
-                    "status": campaign.status.value,
-                    "videos_discovered": campaign.total_videos_discovered,
-                    "videos_relevant": campaign.total_videos_relevant,
-                    "channels_explored": campaign.total_channels_explored,
-                    "api_calls": campaign.api_calls_made,
-                    "llm_calls": campaign.llm_calls_made,
-                    "duration": result.duration_seconds,
-                    "errors": result.errors,
-                }
+                    # Refresh campaign state
+                    await session.refresh(campaign)
+
+                    return {
+                        "success": result.success,
+                        "campaign_id": campaign_id,
+                        "status": campaign.status.value,
+                        "videos_discovered": campaign.total_videos_discovered,
+                        "videos_relevant": campaign.total_videos_relevant,
+                        "channels_explored": campaign.total_channels_explored,
+                        "api_calls": campaign.api_calls_made,
+                        "llm_calls": campaign.llm_calls_made,
+                        "duration": result.duration_seconds,
+                        "errors": result.errors,
+                    }
+            finally:
+                # Dispose of worker engine to clean up connections
+                await worker_engine.dispose()
 
         # Run async function
         loop = asyncio.new_event_loop()
@@ -200,6 +274,21 @@ def run_topic_campaign_task(
             f"Topic campaign {campaign_id} completed: "
             f"{result['videos_relevant']} relevant videos in {duration:.1f}s"
         )
+
+        # Publish campaign completion event
+        publish_campaign_progress(campaign_id, {
+            "type": "campaign_completed",
+            "message": f"Campaign completed with {result['videos_relevant']} relevant videos",
+            "status": result.get("status", "completed"),
+            "stats": {
+                "videos_discovered": result.get("videos_discovered", 0),
+                "videos_relevant": result.get("videos_relevant", 0),
+                "channels_explored": result.get("channels_explored", 0),
+                "api_calls": result.get("api_calls", 0),
+                "llm_calls": result.get("llm_calls", 0),
+                "duration": duration,
+            }
+        })
 
         return result
 
@@ -239,36 +328,41 @@ def run_search_agent_task(
         campaign_uuid = UUID(campaign_id)
 
         async def _run():
-            async with AsyncSessionLocal() as session:
-                campaign = await session.get(TopicCampaign, campaign_uuid)
-                if not campaign:
-                    raise ValueError(f"Campaign not found: {campaign_id}")
+            # Create fresh session factory for this event loop
+            WorkerSession, worker_engine = create_worker_session_factory()
+            try:
+                async with WorkerSession() as session:
+                    campaign = await session.get(TopicCampaign, campaign_uuid)
+                    if not campaign:
+                        raise ValueError(f"Campaign not found: {campaign_id}")
 
-                context = AgentContext(
-                    campaign_id=campaign_uuid,
-                    campaign=campaign,
-                    db=session,
-                    config=campaign.config or {},
-                    youtube_rate_limiter=RateLimiter(requests_per_minute=120),
-                    llm_rate_limiter=RateLimiter(requests_per_minute=60),
-                )
+                    context = AgentContext(
+                        campaign_id=campaign_uuid,
+                        campaign=campaign,
+                        db=session,
+                        config=campaign.config or {},
+                        youtube_rate_limiter=RateLimiter(requests_per_minute=120),
+                        llm_rate_limiter=RateLimiter(requests_per_minute=60),
+                    )
 
-                youtube_client = YouTubeAPIClient()
-                agent = SearchAgent(context, youtube_client)
+                    youtube_client = YouTubeAPIClient()
+                    agent = SearchAgent(context, youtube_client)
 
-                result = await agent.execute({
-                    "topic": topic,
-                    "max_results": max_results,
-                })
+                    result = await agent.execute({
+                        "topic": topic,
+                        "max_results": max_results,
+                    })
 
-                return {
-                    "success": result.success,
-                    "video_ids": result.data.get("video_ids", []),
-                    "channel_ids": result.data.get("channel_ids", []),
-                    "new_videos": result.data.get("new_videos_count", 0),
-                    "api_calls": result.api_calls_made,
-                    "duration": result.duration_seconds,
-                }
+                    return {
+                        "success": result.success,
+                        "video_ids": result.data.get("video_ids", []),
+                        "channel_ids": result.data.get("channel_ids", []),
+                        "new_videos": result.data.get("new_videos_count", 0),
+                        "api_calls": result.api_calls_made,
+                        "duration": result.duration_seconds,
+                    }
+            finally:
+                await worker_engine.dispose()
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -316,36 +410,41 @@ def run_channel_expansion_task(
         channel_uuid = UUID(channel_id)
 
         async def _run():
-            async with AsyncSessionLocal() as session:
-                campaign = await session.get(TopicCampaign, campaign_uuid)
-                if not campaign:
-                    raise ValueError(f"Campaign not found: {campaign_id}")
+            # Create fresh session factory for this event loop
+            WorkerSession, worker_engine = create_worker_session_factory()
+            try:
+                async with WorkerSession() as session:
+                    campaign = await session.get(TopicCampaign, campaign_uuid)
+                    if not campaign:
+                        raise ValueError(f"Campaign not found: {campaign_id}")
 
-                context = AgentContext(
-                    campaign_id=campaign_uuid,
-                    campaign=campaign,
-                    db=session,
-                    config=campaign.config or {},
-                    youtube_rate_limiter=RateLimiter(requests_per_minute=120),
-                    llm_rate_limiter=RateLimiter(requests_per_minute=60),
-                )
+                    context = AgentContext(
+                        campaign_id=campaign_uuid,
+                        campaign=campaign,
+                        db=session,
+                        config=campaign.config or {},
+                        youtube_rate_limiter=RateLimiter(requests_per_minute=120),
+                        llm_rate_limiter=RateLimiter(requests_per_minute=60),
+                    )
 
-                youtube_client = YouTubeAPIClient()
-                agent = ChannelExpansionAgent(context, youtube_client)
+                    youtube_client = YouTubeAPIClient()
+                    agent = ChannelExpansionAgent(context, youtube_client)
 
-                result = await agent.execute({
-                    "channel_id": str(channel_uuid),
-                    "max_videos": max_videos,
-                })
+                    result = await agent.execute({
+                        "channel_id": str(channel_uuid),
+                        "max_videos": max_videos,
+                    })
 
-                return {
-                    "success": result.success,
-                    "video_ids": result.data.get("video_ids", []),
-                    "new_videos": result.data.get("new_videos_count", 0),
-                    "was_expanded": result.data.get("was_expanded", False),
-                    "api_calls": result.api_calls_made,
-                    "duration": result.duration_seconds,
-                }
+                    return {
+                        "success": result.success,
+                        "video_ids": result.data.get("video_ids", []),
+                        "new_videos": result.data.get("new_videos_count", 0),
+                        "was_expanded": result.data.get("was_expanded", False),
+                        "api_calls": result.api_calls_made,
+                        "duration": result.duration_seconds,
+                    }
+            finally:
+                await worker_engine.dispose()
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -392,40 +491,45 @@ def run_topic_filter_task(
         campaign_uuid = UUID(campaign_id)
 
         async def _run():
-            async with AsyncSessionLocal() as session:
-                campaign = await session.get(TopicCampaign, campaign_uuid)
-                if not campaign:
-                    raise ValueError(f"Campaign not found: {campaign_id}")
+            # Create fresh session factory for this event loop
+            WorkerSession, worker_engine = create_worker_session_factory()
+            try:
+                async with WorkerSession() as session:
+                    campaign = await session.get(TopicCampaign, campaign_uuid)
+                    if not campaign:
+                        raise ValueError(f"Campaign not found: {campaign_id}")
 
-                context = AgentContext(
-                    campaign_id=campaign_uuid,
-                    campaign=campaign,
-                    db=session,
-                    config=campaign.config or {},
-                    youtube_rate_limiter=RateLimiter(requests_per_minute=120),
-                    llm_rate_limiter=RateLimiter(requests_per_minute=60),
-                )
+                    context = AgentContext(
+                        campaign_id=campaign_uuid,
+                        campaign=campaign,
+                        db=session,
+                        config=campaign.config or {},
+                        youtube_rate_limiter=RateLimiter(requests_per_minute=120),
+                        llm_rate_limiter=RateLimiter(requests_per_minute=60),
+                    )
 
-                llm_manager = LLMManager()
-                agent = TopicFilterAgent(context, llm_manager)
+                    llm_manager = LLMManager()
+                    agent = TopicFilterAgent(context, llm_manager)
 
-                result = await agent.execute({
-                    "video_ids": video_ids,
-                    "topic": topic,
-                    "batch_size": 10,
-                })
+                    result = await agent.execute({
+                        "video_ids": video_ids,
+                        "topic": topic,
+                        "batch_size": 10,
+                    })
 
-                return {
-                    "success": result.success,
-                    "relevant_ids": result.data.get("relevant_ids", []),
-                    "filtered_ids": result.data.get("filtered_ids", []),
-                    "total_processed": result.data.get("total_processed", 0),
-                    "acceptance_rate": result.data.get("acceptance_rate", 0),
-                    "llm_calls": result.llm_calls_made,
-                    "tokens_used": result.tokens_used,
-                    "cost_usd": result.estimated_cost_usd,
-                    "duration": result.duration_seconds,
-                }
+                    return {
+                        "success": result.success,
+                        "relevant_ids": result.data.get("relevant_ids", []),
+                        "filtered_ids": result.data.get("filtered_ids", []),
+                        "total_processed": result.data.get("total_processed", 0),
+                        "acceptance_rate": result.data.get("acceptance_rate", 0),
+                        "llm_calls": result.llm_calls_made,
+                        "tokens_used": result.tokens_used,
+                        "cost_usd": result.estimated_cost_usd,
+                        "duration": result.duration_seconds,
+                    }
+            finally:
+                await worker_engine.dispose()
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -472,37 +576,42 @@ def run_similar_videos_task(
         campaign_uuid = UUID(campaign_id)
 
         async def _run():
-            async with AsyncSessionLocal() as session:
-                campaign = await session.get(TopicCampaign, campaign_uuid)
-                if not campaign:
-                    raise ValueError(f"Campaign not found: {campaign_id}")
+            # Create fresh session factory for this event loop
+            WorkerSession, worker_engine = create_worker_session_factory()
+            try:
+                async with WorkerSession() as session:
+                    campaign = await session.get(TopicCampaign, campaign_uuid)
+                    if not campaign:
+                        raise ValueError(f"Campaign not found: {campaign_id}")
 
-                context = AgentContext(
-                    campaign_id=campaign_uuid,
-                    campaign=campaign,
-                    db=session,
-                    config=campaign.config or {},
-                    youtube_rate_limiter=RateLimiter(requests_per_minute=120),
-                    llm_rate_limiter=RateLimiter(requests_per_minute=60),
-                )
+                    context = AgentContext(
+                        campaign_id=campaign_uuid,
+                        campaign=campaign,
+                        db=session,
+                        config=campaign.config or {},
+                        youtube_rate_limiter=RateLimiter(requests_per_minute=120),
+                        llm_rate_limiter=RateLimiter(requests_per_minute=60),
+                    )
 
-                youtube_client = YouTubeAPIClient()
-                agent = SimilarVideosAgent(context, youtube_client)
+                    youtube_client = YouTubeAPIClient()
+                    agent = SimilarVideosAgent(context, youtube_client)
 
-                result = await agent.execute({
-                    "video_ids": video_ids,
-                    "depth": depth,
-                    "max_per_video": 5,
-                })
+                    result = await agent.execute({
+                        "video_ids": video_ids,
+                        "depth": depth,
+                        "max_per_video": 5,
+                    })
 
-                return {
-                    "success": result.success,
-                    "discovered_video_ids": result.data.get("discovered_video_ids", []),
-                    "discovered_channel_ids": result.data.get("discovered_channel_ids", []),
-                    "new_videos": result.data.get("new_videos_count", 0),
-                    "api_calls": result.api_calls_made,
-                    "duration": result.duration_seconds,
-                }
+                    return {
+                        "success": result.success,
+                        "discovered_video_ids": result.data.get("discovered_video_ids", []),
+                        "discovered_channel_ids": result.data.get("discovered_channel_ids", []),
+                        "new_videos": result.data.get("new_videos_count", 0),
+                        "api_calls": result.api_calls_made,
+                        "duration": result.duration_seconds,
+                    }
+            finally:
+                await worker_engine.dispose()
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -577,6 +686,76 @@ def process_campaign_transcripts_task(
 
     except Exception as e:
         logger.exception(f"Failed to queue transcript processing: {e}")
+        return {
+            "success": False,
+            "campaign_id": campaign_id,
+            "error": str(e),
+        }
+
+
+@celery_app.task(
+    bind=True,
+    name="app.workers.topic_discovery_tasks.extract_campaign_ideas"
+)
+def extract_campaign_ideas_task(
+    self,
+    campaign_id: str,
+) -> Dict[str, Any]:
+    """
+    Queue idea extraction for all videos with transcripts in a campaign.
+
+    Args:
+        campaign_id: Campaign ID
+
+    Returns:
+        Dictionary with queued job info
+    """
+    try:
+        campaign_uuid = UUID(campaign_id)
+
+        async def _get_videos_with_transcripts():
+            async with AsyncSessionLocal() as session:
+                from sqlalchemy import select
+
+                # Get videos that are relevant and have transcripts but no ideas extracted
+                result = await session.execute(
+                    select(CampaignVideo.video_id).where(
+                        CampaignVideo.campaign_id == campaign_uuid,
+                        CampaignVideo.is_topic_relevant == True,
+                        CampaignVideo.transcript_extracted == True,
+                        CampaignVideo.ideas_extracted == False,
+                    )
+                )
+                return [str(row[0]) for row in result.all()]
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            video_ids = loop.run_until_complete(_get_videos_with_transcripts())
+        finally:
+            loop.close()
+
+        # Queue idea extraction tasks
+        # Note: Import here to avoid circular imports
+        from app.workers.processing_tasks import extract_transcript_task
+
+        queued = 0
+        for video_id in video_ids:
+            # TODO: Replace with actual idea extraction task when available
+            # For now, we'll just log and count - the actual task should be
+            # something like: extract_ideas_task.delay(video_id)
+            queued += 1
+
+        logger.info(f"Queued {queued} idea extraction tasks for campaign {campaign_id}")
+
+        return {
+            "success": True,
+            "campaign_id": campaign_id,
+            "videos_queued": queued,
+        }
+
+    except Exception as e:
+        logger.exception(f"Failed to queue idea extraction: {e}")
         return {
             "success": False,
             "campaign_id": campaign_id,

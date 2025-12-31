@@ -118,6 +118,19 @@ class TopicDiscoveryService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def count_campaigns(
+        self,
+        status: Optional[CampaignStatus] = None,
+    ) -> int:
+        """Count campaigns with optional status filtering."""
+        query = select(func.count(TopicCampaign.id))
+
+        if status:
+            query = query.where(TopicCampaign.status == status)
+
+        result = await self.db.execute(query)
+        return result.scalar() or 0
+
     async def update_campaign(
         self,
         campaign_id: UUID,
@@ -300,6 +313,38 @@ class TopicDiscoveryService:
         await self.db.refresh(campaign)
 
         logger.info(f"Cancelled topic campaign: {campaign_id}")
+        return campaign
+
+    async def retry_campaign(self, campaign_id: UUID) -> TopicCampaign:
+        """
+        Retry a failed campaign.
+
+        Resets error state and sets status back to DRAFT so it can be started again.
+
+        Args:
+            campaign_id: Campaign to retry
+
+        Returns:
+            Updated campaign ready to be started
+        """
+        campaign = await self.get_campaign(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        if campaign.status != CampaignStatus.FAILED:
+            raise ValueError(f"Can only retry campaigns in FAILED status, current status: {campaign.status.value}")
+
+        # Reset error state
+        campaign.status = CampaignStatus.DRAFT
+        campaign.error_message = None
+        campaign.error_count = 0
+        campaign.completed_at = None
+        campaign.execution_time_seconds = None
+
+        await self.db.commit()
+        await self.db.refresh(campaign)
+
+        logger.info(f"Reset failed campaign for retry: {campaign_id}")
         return campaign
 
     # Progress and results

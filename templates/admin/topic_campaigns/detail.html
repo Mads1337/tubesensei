@@ -59,6 +59,11 @@
                     class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
                 <i class="fas fa-stop mr-1"></i> Cancel
             </button>
+            {% elif campaign.status.value == 'failed' %}
+            <button onclick="retryCampaign('{{ campaign.id }}')"
+                    class="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700">
+                <i class="fas fa-redo mr-1"></i> Retry Campaign
+            </button>
             {% endif %}
             {% if campaign.status.value in ['completed', 'cancelled'] %}
             <a href="/api/v1/topic-campaigns/{{ campaign.id }}/export?format=json"
@@ -126,6 +131,14 @@
                 {% endif %}
             </span>
         </div>
+
+        <!-- ETA Display -->
+        <template x-if="eta && status === 'Running'">
+            <div class="mt-4 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                <i class="fas fa-clock mr-2"></i>
+                <span>Estimated completion: <span class="font-medium text-gray-900 dark:text-white" x-text="formatEta(eta)"></span></span>
+            </div>
+        </template>
     </div>
 
     <!-- Agent Status Cards -->
@@ -343,6 +356,7 @@ function campaignDashboard(campaignId) {
         campaignId: campaignId,
         status: '{{ campaign.status.value | title }}',
         progress: {{ campaign.progress_percent or 0 }},
+        eta: {{ ("'" + campaign.estimated_completion_at.isoformat() + "'") if campaign.estimated_completion_at else 'null' }},
         stats: {
             videos_discovered: {{ campaign.total_videos_discovered or 0 }},
             videos_relevant: {{ campaign.total_videos_relevant or 0 }},
@@ -353,14 +367,207 @@ function campaignDashboard(campaignId) {
             filter_acceptance_rate: {{ (campaign.total_videos_relevant / campaign.total_videos_discovered) if campaign.total_videos_discovered else 0 }}
         },
         pollInterval: null,
+        ws: null,
+        wsReconnectAttempts: 0,
+        maxReconnectAttempts: 5,
+        reconnectDelay: 2000,
+        useWebSocket: true,
+        lastEventMessage: '',
 
         init() {
             if (this.status === 'Running') {
+                this.connectWebSocket();
+            }
+        },
+
+        formatEta(isoDate) {
+            if (!isoDate) return '';
+            const eta = new Date(isoDate);
+            const now = new Date();
+            const diff = (eta - now) / 1000 / 60; // minutes
+            if (diff < 1) {
+                return 'less than a minute';
+            } else if (diff < 60) {
+                return `~${Math.round(diff)} minutes`;
+            } else {
+                const hours = Math.round(diff / 60);
+                return `~${hours} hour${hours > 1 ? 's' : ''}`;
+            }
+        },
+
+        connectWebSocket() {
+            if (!this.useWebSocket) {
+                this.startPolling();
+                return;
+            }
+
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/campaigns/${this.campaignId}`;
+
+            console.log('Connecting to WebSocket:', wsUrl);
+
+            try {
+                this.ws = new WebSocket(wsUrl);
+
+                this.ws.onopen = () => {
+                    console.log('WebSocket connected');
+                    this.wsReconnectAttempts = 0;
+                    // Stop polling if it was running as fallback
+                    this.stopPolling();
+                };
+
+                this.ws.onmessage = (event) => {
+                    try {
+                        const message = JSON.parse(event.data);
+                        this.handleWebSocketMessage(message);
+                    } catch (e) {
+                        console.error('Failed to parse WebSocket message:', e);
+                    }
+                };
+
+                this.ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                };
+
+                this.ws.onclose = (event) => {
+                    console.log('WebSocket closed:', event.code, event.reason);
+                    this.ws = null;
+
+                    // Attempt reconnect if campaign is still running
+                    if (['Running', 'running'].includes(this.status)) {
+                        if (this.wsReconnectAttempts < this.maxReconnectAttempts) {
+                            this.wsReconnectAttempts++;
+                            console.log(`Reconnect attempt ${this.wsReconnectAttempts}/${this.maxReconnectAttempts}`);
+                            setTimeout(() => this.connectWebSocket(), this.reconnectDelay * this.wsReconnectAttempts);
+                        } else {
+                            console.log('Max reconnect attempts reached, falling back to polling');
+                            this.useWebSocket = false;
+                            this.startPolling();
+                        }
+                    }
+                };
+            } catch (error) {
+                console.error('Failed to create WebSocket:', error);
                 this.startPolling();
             }
         },
 
+        handleWebSocketMessage(message) {
+            switch (message.type) {
+                case 'connected':
+                    console.log('Campaign WebSocket connected:', message.campaign_id);
+                    break;
+
+                case 'campaign_update':
+                    // Real-time update from Redis pubsub
+                    if (message.data) {
+                        this.handleCampaignEvent(message.data);
+                    }
+                    break;
+
+                case 'heartbeat':
+                    // Periodic status update from database
+                    this.updateFromHeartbeat(message);
+                    break;
+
+                case 'campaign_complete':
+                    console.log('Campaign completed:', message.status);
+                    this.status = message.status.charAt(0).toUpperCase() + message.status.slice(1);
+                    this.disconnectWebSocket();
+                    // Refresh the page to update controls
+                    setTimeout(() => window.location.reload(), 1000);
+                    break;
+
+                case 'ping':
+                    // Respond to server ping with pong
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify({ type: 'pong' }));
+                    }
+                    break;
+
+                case 'pong':
+                    // Server acknowledged our ping
+                    break;
+
+                default:
+                    console.log('Unknown WebSocket message type:', message.type);
+            }
+        },
+
+        handleCampaignEvent(data) {
+            // Handle real-time campaign events from agents
+            if (data.message) {
+                this.lastEventMessage = data.message;
+            }
+
+            if (data.progress !== null && data.progress !== undefined) {
+                this.progress = data.progress;
+            }
+
+            // Update stats if provided in data
+            if (data.stats) {
+                Object.assign(this.stats, data.stats);
+            }
+
+            // Handle specific event types
+            switch (data.type) {
+                case 'campaign_started':
+                    this.status = 'Running';
+                    break;
+
+                case 'campaign_completed':
+                    this.status = data.status ? data.status.charAt(0).toUpperCase() + data.status.slice(1) : 'Completed';
+                    if (data.stats) {
+                        this.stats = { ...this.stats, ...data.stats };
+                    }
+                    this.disconnectWebSocket();
+                    setTimeout(() => window.location.reload(), 1000);
+                    break;
+
+                case 'campaign_failed':
+                    this.status = 'Failed';
+                    this.disconnectWebSocket();
+                    setTimeout(() => window.location.reload(), 1000);
+                    break;
+
+                case 'agent_progress':
+                case 'video_discovered':
+                case 'video_filtered':
+                case 'channel_explored':
+                    // These are granular progress updates - the heartbeat will sync full stats
+                    break;
+            }
+        },
+
+        updateFromHeartbeat(message) {
+            this.status = message.status.charAt(0).toUpperCase() + message.status.slice(1);
+            this.progress = message.progress || 0;
+
+            if (message.stats) {
+                this.stats.videos_discovered = message.stats.videos_discovered || 0;
+                this.stats.videos_relevant = message.stats.videos_relevant || 0;
+                this.stats.videos_filtered = message.stats.videos_filtered || 0;
+                this.stats.channels_explored = message.stats.channels_explored || 0;
+                this.stats.api_calls = message.stats.api_calls || 0;
+                this.stats.llm_calls = message.stats.llm_calls || 0;
+
+                // Calculate acceptance rate
+                if (this.stats.videos_discovered > 0) {
+                    this.stats.filter_acceptance_rate = this.stats.videos_relevant / this.stats.videos_discovered;
+                }
+            }
+        },
+
+        disconnectWebSocket() {
+            if (this.ws) {
+                this.ws.close();
+                this.ws = null;
+            }
+        },
+
         startPolling() {
+            if (this.pollInterval) return; // Already polling
+            console.log('Starting polling fallback');
             this.pollInterval = setInterval(() => this.fetchProgress(), 5000);
         },
 
@@ -393,10 +600,12 @@ function campaignDashboard(campaignId) {
             this.stats.api_calls = data.api_calls;
             this.stats.llm_calls = data.llm_calls;
             this.stats.filter_acceptance_rate = data.filter_acceptance_rate;
+            this.eta = data.estimated_completion_at;
 
             // Stop polling if campaign is no longer running
             if (!['running', 'Running'].includes(data.status)) {
                 this.stopPolling();
+                this.disconnectWebSocket();
                 // Refresh the page to update controls
                 window.location.reload();
             }
@@ -464,6 +673,21 @@ async function cancelCampaign(id) {
         }
     } catch (e) {
         showToast('Failed to cancel campaign', 'error');
+    }
+}
+
+async function retryCampaign(id) {
+    try {
+        const response = await fetch(`/api/v1/topic-campaigns/${id}/retry`, { method: 'POST' });
+        if (response.ok) {
+            showToast('Campaign retrying!', 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            const error = await response.json();
+            showToast(error.detail || 'Failed to retry campaign', 'error');
+        }
+    } catch (e) {
+        showToast('Failed to retry campaign', 'error');
     }
 }
 

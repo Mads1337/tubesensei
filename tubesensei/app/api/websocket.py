@@ -1,35 +1,83 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
-from typing import Dict, Set
+from typing import Dict, Set, Optional
 import asyncio
 import json
 from datetime import datetime
+import logging
+
+import redis.asyncio as aioredis
 
 from app.core.auth import auth_handler
 from app.services.monitoring_service import MonitoringService
 from app.database import get_db
+from app.config import settings
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+# Redis connection pool for pubsub
+_redis_pool: Optional[aioredis.Redis] = None
+
+
+async def get_redis() -> aioredis.Redis:
+    """Get or create Redis connection for pubsub."""
+    global _redis_pool
+    if _redis_pool is None:
+        _redis_pool = aioredis.from_url(
+            settings.REDIS_URL,
+            encoding="utf-8",
+            decode_responses=True,
+        )
+    return _redis_pool
+
+
+async def publish_campaign_update(campaign_id: str, data: dict) -> None:
+    """
+    Publish campaign update to Redis pubsub.
+
+    Args:
+        campaign_id: The campaign ID to publish updates for
+        data: The update data dict containing type, message, progress, etc.
+    """
+    try:
+        redis = await get_redis()
+        channel = f"campaign:{campaign_id}"
+        message = json.dumps({
+            **data,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+        await redis.publish(channel, message)
+        logger.debug(f"Published campaign update to {channel}: {data.get('type', 'unknown')}")
+    except Exception as e:
+        logger.error(f"Failed to publish campaign update: {e}")
 
 
 class ConnectionManager:
     """Manage WebSocket connections"""
-    
+
     def __init__(self):
         self.active_connections: Dict[str, Set[WebSocket]] = {
             "dashboard": set(),
             "jobs": set(),
             "ideas": set()
         }
-    
+
     async def connect(self, websocket: WebSocket, channel: str = "dashboard"):
         """Accept new connection"""
         await websocket.accept()
+        # Dynamically create channel if it doesn't exist (for campaigns)
+        if channel not in self.active_connections:
+            self.active_connections[channel] = set()
         self.active_connections[channel].add(websocket)
     
     async def disconnect(self, websocket: WebSocket, channel: str = "dashboard"):
         """Remove connection"""
-        self.active_connections[channel].discard(websocket)
+        if channel in self.active_connections:
+            self.active_connections[channel].discard(websocket)
+            # Clean up empty dynamic channels (campaigns)
+            if channel.startswith("campaign_") and len(self.active_connections[channel]) == 0:
+                del self.active_connections[channel]
     
     async def broadcast(self, message: dict, channel: str = "dashboard"):
         """Broadcast message to all connections in channel"""
@@ -240,14 +288,174 @@ async def ideas_websocket(websocket: WebSocket):
         await manager.disconnect(websocket, "ideas")
 
 
+@router.websocket("/ws/campaigns/{campaign_id}")
+async def campaign_websocket(websocket: WebSocket, campaign_id: str):
+    """
+    WebSocket endpoint for campaign progress updates.
+
+    Subscribes to Redis pubsub channel for real-time campaign events.
+    Falls back to periodic progress polling if pubsub fails.
+    """
+    channel = f"campaign_{campaign_id}"
+    await manager.connect(websocket, channel)
+
+    redis = None
+    pubsub = None
+
+    try:
+        # Get Redis connection and subscribe to campaign channel
+        redis = await get_redis()
+        pubsub = redis.pubsub()
+        redis_channel = f"campaign:{campaign_id}"
+        await pubsub.subscribe(redis_channel)
+        logger.info(f"WebSocket client connected to campaign {campaign_id}")
+
+        # Send initial connection confirmation
+        await manager.send_personal({
+            "type": "connected",
+            "campaign_id": campaign_id,
+            "timestamp": datetime.utcnow().isoformat()
+        }, websocket)
+
+        # Create tasks for Redis listener and heartbeat
+        redis_task = asyncio.create_task(
+            listen_redis_pubsub(websocket, pubsub, campaign_id)
+        )
+        heartbeat_task = asyncio.create_task(
+            campaign_heartbeat(websocket, campaign_id)
+        )
+
+        try:
+            # Wait for client messages (ping/pong, close)
+            while True:
+                try:
+                    data = await asyncio.wait_for(
+                        websocket.receive_text(),
+                        timeout=30.0
+                    )
+                    message = json.loads(data)
+
+                    if message.get("type") == "ping":
+                        await manager.send_personal({
+                            "type": "pong",
+                            "timestamp": datetime.utcnow().isoformat()
+                        }, websocket)
+                    elif message.get("type") == "close":
+                        break
+
+                except asyncio.TimeoutError:
+                    # Send ping to keep connection alive
+                    await manager.send_personal({
+                        "type": "ping",
+                        "timestamp": datetime.utcnow().isoformat()
+                    }, websocket)
+
+        except WebSocketDisconnect:
+            pass
+        finally:
+            redis_task.cancel()
+            heartbeat_task.cancel()
+            try:
+                await redis_task
+            except asyncio.CancelledError:
+                pass
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+
+    except Exception as e:
+        logger.error(f"Campaign WebSocket error: {e}")
+    finally:
+        if pubsub:
+            await pubsub.unsubscribe(f"campaign:{campaign_id}")
+            await pubsub.close()
+        await manager.disconnect(websocket, channel)
+        logger.info(f"WebSocket client disconnected from campaign {campaign_id}")
+
+
+async def listen_redis_pubsub(websocket: WebSocket, pubsub, campaign_id: str):
+    """Listen for Redis pubsub messages and forward to WebSocket."""
+    try:
+        async for message in pubsub.listen():
+            if message["type"] == "message":
+                data = message["data"]
+                # Parse JSON if it's a string
+                if isinstance(data, str):
+                    try:
+                        data = json.loads(data)
+                    except json.JSONDecodeError:
+                        data = {"type": "raw", "message": data}
+
+                await manager.send_personal({
+                    "type": "campaign_update",
+                    "campaign_id": campaign_id,
+                    "data": data,
+                    "timestamp": datetime.utcnow().isoformat()
+                }, websocket)
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        logger.error(f"Redis pubsub listener error for campaign {campaign_id}: {e}")
+
+
+async def campaign_heartbeat(websocket: WebSocket, campaign_id: str):
+    """Send periodic heartbeat with campaign status from database."""
+    try:
+        async for db in get_db():
+            from app.models.topic_campaign import TopicCampaign
+            from uuid import UUID
+
+            while True:
+                await asyncio.sleep(10)  # Heartbeat every 10 seconds
+
+                try:
+                    # Fetch current campaign status
+                    campaign = await db.get(TopicCampaign, UUID(campaign_id))
+                    if campaign:
+                        await manager.send_personal({
+                            "type": "heartbeat",
+                            "campaign_id": campaign_id,
+                            "status": campaign.status.value,
+                            "progress": campaign.progress_percent,
+                            "stats": {
+                                "videos_discovered": campaign.total_videos_discovered or 0,
+                                "videos_relevant": campaign.total_videos_relevant or 0,
+                                "videos_filtered": campaign.total_videos_filtered or 0,
+                                "channels_explored": campaign.total_channels_explored or 0,
+                                "api_calls": campaign.api_calls_made or 0,
+                                "llm_calls": campaign.llm_calls_made or 0,
+                            },
+                            "timestamp": datetime.utcnow().isoformat()
+                        }, websocket)
+
+                        # If campaign is no longer running, send completion event
+                        if campaign.status.value not in ["running", "paused"]:
+                            await manager.send_personal({
+                                "type": "campaign_complete",
+                                "campaign_id": campaign_id,
+                                "status": campaign.status.value,
+                                "timestamp": datetime.utcnow().isoformat()
+                            }, websocket)
+                            break
+
+                except Exception as e:
+                    logger.error(f"Heartbeat error for campaign {campaign_id}: {e}")
+
+    except asyncio.CancelledError:
+        pass
+
+
 @router.get("/ws/status")
 async def websocket_status():
     """Get WebSocket connection status"""
+    # Include all channels, including dynamic campaign channels
+    all_channels = {}
+    for channel in manager.active_connections.keys():
+        all_channels[channel] = manager.get_connection_count(channel)
+
     return {
         "total_connections": manager.get_connection_count(),
-        "channels": {
-            channel: manager.get_connection_count(channel)
-            for channel in ["dashboard", "jobs", "ideas"]
-        },
+        "channels": all_channels,
         "timestamp": datetime.utcnow().isoformat()
     }
