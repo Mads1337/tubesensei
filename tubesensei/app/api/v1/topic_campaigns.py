@@ -10,6 +10,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import get_current_user
+from app.core.permissions import require_permission, Permission
 from app.database import get_db
 from app.models.topic_campaign import CampaignStatus as DBCampaignStatus
 from app.models.agent_run import AgentType as DBAgentType
@@ -46,6 +48,7 @@ async def get_topic_discovery_service(
 @router.post("/", response_model=TopicCampaignResponse, status_code=201)
 async def create_campaign(
     data: TopicCampaignCreate,
+    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
     service: TopicDiscoveryService = Depends(get_topic_discovery_service),
 ):
     """
@@ -102,6 +105,7 @@ async def get_campaign(
 async def update_campaign(
     campaign_id: UUID,
     data: TopicCampaignUpdate,
+    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
     service: TopicDiscoveryService = Depends(get_topic_discovery_service),
 ):
     """
@@ -126,6 +130,7 @@ async def update_campaign(
 @router.delete("/{campaign_id}", status_code=204)
 async def delete_campaign(
     campaign_id: UUID,
+    user = Depends(require_permission(Permission.CHANNEL_DELETE)),
     service: TopicDiscoveryService = Depends(get_topic_discovery_service),
 ):
     """
@@ -147,6 +152,7 @@ async def delete_campaign(
 async def start_campaign(
     campaign_id: UUID,
     background_tasks: BackgroundTasks,
+    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
     service: TopicDiscoveryService = Depends(get_topic_discovery_service),
 ):
     """
@@ -177,6 +183,7 @@ async def start_campaign(
 @router.post("/{campaign_id}/pause", response_model=CampaignActionResponse)
 async def pause_campaign(
     campaign_id: UUID,
+    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
     service: TopicDiscoveryService = Depends(get_topic_discovery_service),
 ):
     """Pause a running campaign."""
@@ -197,6 +204,7 @@ async def pause_campaign(
 async def resume_campaign(
     campaign_id: UUID,
     background_tasks: BackgroundTasks,
+    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
     service: TopicDiscoveryService = Depends(get_topic_discovery_service),
 ):
     """Resume a paused campaign."""
@@ -216,6 +224,7 @@ async def resume_campaign(
 @router.post("/{campaign_id}/cancel", response_model=CampaignActionResponse)
 async def cancel_campaign(
     campaign_id: UUID,
+    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
     service: TopicDiscoveryService = Depends(get_topic_discovery_service),
 ):
     """Cancel a running or paused campaign."""
@@ -354,6 +363,7 @@ async def export_campaign_results(
 async def process_campaign_transcripts(
     campaign_id: UUID,
     background_tasks: BackgroundTasks,
+    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
     service: TopicDiscoveryService = Depends(get_topic_discovery_service),
 ):
     """
@@ -381,6 +391,7 @@ async def process_campaign_transcripts(
 async def extract_campaign_ideas(
     campaign_id: UUID,
     background_tasks: BackgroundTasks,
+    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
     service: TopicDiscoveryService = Depends(get_topic_discovery_service),
 ):
     """

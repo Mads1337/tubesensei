@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 import enum
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.models.base import BaseModel
 
@@ -332,7 +332,7 @@ class TopicCampaign(BaseModel):
     def duration_seconds(self) -> Optional[float]:
         """Calculate campaign duration in seconds."""
         if self.started_at:
-            end_time = self.completed_at or datetime.utcnow()
+            end_time = self.completed_at or datetime.now(timezone.utc)
             return (end_time - self.started_at).total_seconds()
         return None
 
@@ -358,14 +358,14 @@ class TopicCampaign(BaseModel):
         if not self.can_start:
             raise ValueError(f"Cannot start campaign in {self.status.value} status")
         self.status = CampaignStatus.RUNNING
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc)
 
     def pause(self) -> None:
         """Pause the campaign."""
         if not self.can_pause:
             raise ValueError(f"Cannot pause campaign in {self.status.value} status")
         self.status = CampaignStatus.PAUSED
-        self.paused_at = datetime.utcnow()
+        self.paused_at = datetime.now(timezone.utc)
 
     def resume(self) -> None:
         """Resume the campaign."""
@@ -377,7 +377,7 @@ class TopicCampaign(BaseModel):
     def complete(self) -> None:
         """Mark campaign as completed."""
         self.status = CampaignStatus.COMPLETED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         self.progress_percent = 100.0
         if self.started_at:
             self.execution_time_seconds = (self.completed_at - self.started_at).total_seconds()
@@ -385,7 +385,7 @@ class TopicCampaign(BaseModel):
     def fail(self, error_message: str) -> None:
         """Mark campaign as failed."""
         self.status = CampaignStatus.FAILED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         self.error_message = error_message
         if self.started_at:
             self.execution_time_seconds = (self.completed_at - self.started_at).total_seconds()
@@ -395,7 +395,7 @@ class TopicCampaign(BaseModel):
         if not self.can_cancel:
             raise ValueError(f"Cannot cancel campaign in {self.status.value} status")
         self.status = CampaignStatus.CANCELLED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         if self.started_at:
             self.execution_time_seconds = (self.completed_at - self.started_at).total_seconds()
 
@@ -446,7 +446,7 @@ class TopicCampaign(BaseModel):
     def save_checkpoint(self, data: Dict[str, Any]) -> None:
         """Save checkpoint data for resume capability."""
         self.checkpoint_data = data
-        self.last_checkpoint_at = datetime.utcnow()
+        self.last_checkpoint_at = datetime.now(timezone.utc)
 
     def clear_checkpoint(self) -> None:
         """Clear checkpoint data."""

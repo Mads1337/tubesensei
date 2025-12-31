@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 import enum
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.models.base import BaseModel
 
@@ -56,7 +56,7 @@ class CampaignVideo(BaseModel):
     discovered_at = Column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(timezone.utc),
         comment="When the video was discovered"
     )
 
@@ -252,7 +252,7 @@ class CampaignVideo(BaseModel):
         self.filter_reasoning = reasoning
         self.matched_keywords = keywords or []
         self.topic_alignment = alignment
-        self.filtered_at = datetime.utcnow()
+        self.filtered_at = datetime.now(timezone.utc)
 
     def mark_irrelevant(
         self,
@@ -265,17 +265,17 @@ class CampaignVideo(BaseModel):
         self.relevance_score = score
         self.filter_reasoning = reasoning
         self.topic_alignment = alignment or "unrelated"
-        self.filtered_at = datetime.utcnow()
+        self.filtered_at = datetime.now(timezone.utc)
 
     def mark_transcript_extracted(self) -> None:
         """Mark that transcript has been extracted."""
         self.transcript_extracted = True
-        self.transcript_extracted_at = datetime.utcnow()
+        self.transcript_extracted_at = datetime.now(timezone.utc)
 
     def mark_ideas_extracted(self) -> None:
         """Mark that ideas have been extracted."""
         self.ideas_extracted = True
-        self.ideas_extracted_at = datetime.utcnow()
+        self.ideas_extracted_at = datetime.now(timezone.utc)
 
     def get_summary(self) -> Dict[str, Any]:
         """Get summary for API responses."""

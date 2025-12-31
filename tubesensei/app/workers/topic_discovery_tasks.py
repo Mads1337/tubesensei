@@ -7,7 +7,7 @@ including the main campaign runner and individual agent tasks.
 import logging
 import asyncio
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from celery import Task
@@ -55,7 +55,12 @@ class TopicDiscoveryTask(Task):
             # Update campaign status to failed
             campaign_id = kwargs.get('campaign_id') or (args[0] if args else None)
             if campaign_id:
-                asyncio.get_event_loop().run_until_complete(
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                loop.run_until_complete(
                     self._mark_campaign_failed(campaign_id, str(exc))
                 )
         except Exception as e:
@@ -115,7 +120,7 @@ def run_topic_campaign_task(
     Returns:
         Dictionary with campaign results
     """
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
     TaskMonitor.record_task_start(self.name)
 
     try:
@@ -188,7 +193,7 @@ def run_topic_campaign_task(
         finally:
             loop.close()
 
-        duration = (datetime.utcnow() - start_time).total_seconds()
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
         result["total_duration"] = duration
 
         logger.info(
@@ -227,7 +232,7 @@ def run_search_agent_task(
     Returns:
         Dictionary with search results
     """
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
     TaskMonitor.record_task_start(self.name)
 
     try:
@@ -303,7 +308,7 @@ def run_channel_expansion_task(
     Returns:
         Dictionary with expansion results
     """
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
     TaskMonitor.record_task_start(self.name)
 
     try:
@@ -380,7 +385,7 @@ def run_topic_filter_task(
     Returns:
         Dictionary with filter results
     """
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
     TaskMonitor.record_task_start(self.name)
 
     try:
@@ -460,7 +465,7 @@ def run_similar_videos_task(
     Returns:
         Dictionary with discovery results
     """
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
     TaskMonitor.record_task_start(self.name)
 
     try:

@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() if csrf_token is defined else '' }}">
     <title>{% block title %}TubeSensei Admin{% endblock %}</title>
     
     <!-- Tailwind CSS -->
@@ -46,15 +47,35 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', path='/css/style.css') }}">
-    
+
+    <!-- HTMX Loading Indicator CSS -->
+    <style>
+    .htmx-request { opacity: 0.5; pointer-events: none; }
+    .htmx-indicator { display: none; }
+    .htmx-request .htmx-indicator { display: inline-block; }
+    .htmx-request.htmx-indicator { display: inline-block; }
+    </style>
+
+    <!-- Dark Mode Fallback -->
+    <style>
+    @media (prefers-color-scheme: dark) {
+        html:not(.light) { /* dark styles are applied by Alpine.js */ }
+    }
+    </style>
+
     {% block head %}{% endblock %}
 </head>
-<body class="bg-gray-50 dark:bg-gray-900" x-data="{ darkMode: false, sidebarOpen: true, userMenuOpen: false }" 
-      x-init="darkMode = localStorage.getItem('darkMode') === 'true'" 
+<body class="bg-gray-50 dark:bg-gray-900" x-data="{ darkMode: false, sidebarOpen: true, userMenuOpen: false }"
+      x-init="darkMode = localStorage.getItem('darkMode') === 'true'"
       :class="{ 'dark': darkMode }">
-    
+
+    <!-- Skip Link for Keyboard Navigation -->
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-primary-600 focus:text-white">
+        Skip to main content
+    </a>
+
     <!-- Navigation -->
-    <nav class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 fixed w-full top-0 z-50">
+    <nav aria-label="Main navigation" class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 fixed w-full top-0 z-50">
         <div class="px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <!-- Left side -->
@@ -143,7 +164,7 @@
     </nav>
     
     <!-- Sidebar -->
-    <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+    <aside aria-label="Sidebar" :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
            class="fixed inset-y-0 left-0 z-40 w-64 pt-16 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-transform duration-200 ease-in-out md:translate-x-0">
         <nav class="px-4 py-6 space-y-1">
             <a href="/admin" class="sidebar-link group flex items-center px-2 py-2 text-sm font-medium rounded-md {% if request.url.path == '/admin' %}bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-200{% else %}text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
@@ -203,7 +224,7 @@
     </aside>
     
     <!-- Main Content -->
-    <main class="md:ml-64 pt-16 min-h-screen">
+    <main id="main-content" role="main" class="md:ml-64 pt-16 min-h-screen">
         <div class="p-4 sm:p-6 lg:p-8">
             <!-- Page Header -->
             {% block header %}
@@ -258,7 +279,7 @@
             // Add CSRF token to requests if needed
             event.detail.headers['X-Request-ID'] = '{{ request.state.request_id if request.state.request_id else "" }}';
         });
-        
+
         // Show toast notifications from HTMX responses
         document.body.addEventListener('htmx:afterSwap', (event) => {
             if (event.detail.xhr.getResponseHeader('X-Toast')) {
@@ -266,7 +287,22 @@
                 showToast(toast.message, toast.type);
             }
         });
-        
+
+        // HTMX Error Handlers
+        document.body.addEventListener('htmx:responseError', function(event) {
+            const status = event.detail.xhr.status;
+            let message = 'An error occurred';
+            if (status === 401) message = 'Please log in to continue';
+            else if (status === 403) message = 'You do not have permission for this action';
+            else if (status === 404) message = 'Resource not found';
+            else if (status >= 500) message = 'Server error. Please try again later.';
+            showToast(message, 'error');
+        });
+
+        document.body.addEventListener('htmx:sendError', function(event) {
+            showToast('Network error. Please check your connection.', 'error');
+        });
+
         // Toast notification function
         function showToast(message, type = 'info') {
             const toastContainer = document.getElementById('toast-container');

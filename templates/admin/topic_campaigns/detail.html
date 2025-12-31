@@ -88,7 +88,7 @@
         </div>
 
         <!-- Stats Grid -->
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div class="text-2xl font-bold text-gray-900 dark:text-white" x-text="stats.videos_discovered.toLocaleString()">{{ "{:,}".format(campaign.total_videos_discovered or 0) }}</div>
                 <div class="text-sm text-gray-500 dark:text-gray-400">Videos Found</div>
@@ -177,11 +177,11 @@
                         <div class="flex justify-between items-center mb-4">
                             <div class="flex space-x-2">
                                 <button onclick="loadVideos('{{ campaign.id }}', false)"
-                                        class="px-3 py-1 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                                        class="px-3 py-2 text-sm rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
                                     All Videos
                                 </button>
                                 <button onclick="loadVideos('{{ campaign.id }}', true)"
-                                        class="px-3 py-1 text-sm rounded bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800">
+                                        class="px-3 py-2 text-sm rounded bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800">
                                     Relevant Only
                                 </button>
                             </div>

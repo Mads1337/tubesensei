@@ -163,7 +163,7 @@
                     <div class="flex space-x-2 ml-4">
                         {% if campaign.status.value == 'draft' %}
                         <button
-                            class="px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
+                            class="px-3 py-2 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
                             hx-post="/api/v1/topic-campaigns/{{ campaign.id }}/start"
                             hx-target="#campaigns-list"
                             hx-swap="outerHTML"
@@ -172,7 +172,7 @@
                         </button>
                         {% elif campaign.status.value == 'running' %}
                         <button
-                            class="px-3 py-1 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600"
+                            class="px-3 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600"
                             hx-post="/api/v1/topic-campaigns/{{ campaign.id }}/pause"
                             hx-target="#campaigns-list"
                             hx-swap="outerHTML"
@@ -181,7 +181,7 @@
                         </button>
                         {% elif campaign.status.value == 'paused' %}
                         <button
-                            class="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+                            class="px-3 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
                             hx-post="/api/v1/topic-campaigns/{{ campaign.id }}/resume"
                             hx-target="#campaigns-list"
                             hx-swap="outerHTML"
@@ -190,7 +190,7 @@
                         </button>
                         {% endif %}
                         <a href="/admin/topic-campaigns/{{ campaign.id }}"
-                           class="px-3 py-1 text-sm bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
+                           class="px-3 py-2 text-sm bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
                             <i class="fas fa-eye mr-1"></i> View
                         </a>
                     </div>
@@ -289,13 +289,21 @@
 {% block scripts %}
 <script>
 // Auto-refresh running campaigns every 10 seconds
+let isRefreshing = false;
 setInterval(function() {
-    if (!document.hidden) {
+    if (!document.hidden && !isRefreshing) {
         const runningCampaigns = document.querySelectorAll('[data-status="running"]');
         if (runningCampaigns.length > 0) {
+            isRefreshing = true;
             htmx.trigger('#campaigns-list', 'refresh');
         }
     }
 }, 10000);
+
+document.body.addEventListener('htmx:afterRequest', function(event) {
+    if (event.detail.target && event.detail.target.id === 'campaigns-list') {
+        isRefreshing = false;
+    }
+});
 </script>
 {% endblock %}

@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 import enum
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.models.base import BaseModel
 from app.models.campaign_video import DiscoverySource
@@ -49,7 +49,7 @@ class CampaignChannel(BaseModel):
     discovered_at = Column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(timezone.utc),
         comment="When the channel was first encountered"
     )
 
@@ -218,7 +218,7 @@ class CampaignChannel(BaseModel):
     def mark_expanded(self) -> None:
         """Mark channel as fully expanded."""
         self.was_expanded = True
-        self.expanded_at = datetime.utcnow()
+        self.expanded_at = datetime.now(timezone.utc)
 
     def mark_limit_reached(self) -> None:
         """Mark that the per-channel limit has been reached."""

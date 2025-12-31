@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID, ARRAY
 from sqlalchemy.orm import relationship
 import enum
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.models.base import BaseModel
 
@@ -267,7 +267,7 @@ class AgentRun(BaseModel):
     def duration_seconds(self) -> Optional[float]:
         """Calculate execution duration."""
         if self.started_at:
-            end_time = self.completed_at or datetime.utcnow()
+            end_time = self.completed_at or datetime.now(timezone.utc)
             return (end_time - self.started_at).total_seconds()
         return None
 
@@ -300,12 +300,12 @@ class AgentRun(BaseModel):
     def start(self) -> None:
         """Mark agent as running."""
         self.status = AgentRunStatus.RUNNING
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc)
 
     def complete(self, output_data: Optional[Dict[str, Any]] = None) -> None:
         """Mark agent as completed successfully."""
         self.status = AgentRunStatus.COMPLETED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         self.progress_percent = 100.0
         if output_data:
             self.output_data = output_data
@@ -315,7 +315,7 @@ class AgentRun(BaseModel):
     def fail(self, error_message: str, error_details: Optional[Dict[str, Any]] = None) -> None:
         """Mark agent as failed."""
         self.status = AgentRunStatus.FAILED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         self.error_message = error_message
         if error_details:
             self.error_details = error_details
@@ -325,7 +325,7 @@ class AgentRun(BaseModel):
     def cancel(self) -> None:
         """Mark agent as cancelled."""
         self.status = AgentRunStatus.CANCELLED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         if self.started_at:
             self.execution_time_seconds = (self.completed_at - self.started_at).total_seconds()
 
@@ -367,7 +367,7 @@ class AgentRun(BaseModel):
             self.errors = []
         self.errors.append({
             "message": error,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
     def increment_retry(self) -> None:

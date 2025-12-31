@@ -5,11 +5,11 @@ Main service for managing topic-based video discovery campaigns.
 Provides high-level API for creating, running, and managing campaigns.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -373,9 +373,6 @@ class TopicDiscoveryService:
             .group_by(CampaignVideo.discovery_source)
         )
 
-        # Import Integer for casting
-        from sqlalchemy import Integer
-
         stats = {}
         for row in result.all():
             stats[row.discovery_source.value] = {
@@ -522,7 +519,7 @@ class TopicDiscoveryService:
             export_data = {
                 "campaign": campaign.get_summary(),
                 "videos": videos,
-                "exported_at": datetime.utcnow().isoformat(),
+                "exported_at": datetime.now(timezone.utc).isoformat(),
             }
             return json.dumps(export_data, indent=2).encode("utf-8")
 

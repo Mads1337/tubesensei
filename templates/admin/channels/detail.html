@@ -48,8 +48,8 @@
                     </div>
                 </div>
                 <div class="flex space-x-2">
-                    <button 
-                        class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                    <button
+                        class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
                         hx-post="/admin/channels/{{ channel.id }}/sync"
                         hx-target="#sync-status"
                         hx-indicator="#sync-indicator"
@@ -60,8 +60,8 @@
                         <i class="fas fa-sync-alt mr-2"></i>
                         Sync Now
                     </button>
-                    <a href="/admin/channels/{{ channel.id }}/edit" 
-                       class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
+                    <a href="/admin/channels/{{ channel.id }}/edit"
+                       class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
                         <i class="fas fa-edit mr-2"></i>
                         Edit
                     </a>
@@ -172,37 +172,37 @@
     </div>
 
     <!-- Tabs -->
-    <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg" x-data="{ activeTab: 'videos' }">
         <div class="border-b border-gray-200 dark:border-gray-700">
-            <nav class="-mb-px flex space-x-8" aria-label="Tabs" x-data="{ activeTab: 'videos' }">
-                <button 
+            <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+                <button
                     @click="activeTab = 'videos'"
                     :class="activeTab === 'videos' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                    class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
                 >
                     <i class="fas fa-video mr-2"></i>
                     Recent Videos
                 </button>
-                <button 
+                <button
                     @click="activeTab = 'ideas'"
                     :class="activeTab === 'ideas' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                    class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
                 >
                     <i class="fas fa-lightbulb mr-2"></i>
                     Generated Ideas
                 </button>
-                <button 
+                <button
                     @click="activeTab = 'analytics'"
                     :class="activeTab === 'analytics' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                    class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
                 >
                     <i class="fas fa-chart-line mr-2"></i>
                     Analytics
                 </button>
-                <button 
+                <button
                     @click="activeTab = 'settings'"
                     :class="activeTab === 'settings' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                    class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
                 >
                     <i class="fas fa-cog mr-2"></i>
                     Settings
@@ -215,8 +215,8 @@
             <div x-show="activeTab === 'videos'" class="space-y-4">
                 <div class="flex justify-between items-center">
                     <h3 class="text-lg font-medium text-gray-900 dark:text-white">Recent Videos</h3>
-                    <button 
-                        class="text-sm text-primary-600 hover:text-primary-500"
+                    <button
+                        class="px-3 py-1 text-sm text-primary-600 hover:text-primary-500"
                         hx-get="/admin/channels/{{ channel.id }}/videos"
                         hx-target="#videos-list"
                         hx-swap="innerHTML"
@@ -225,7 +225,7 @@
                         Refresh
                     </button>
                 </div>
-                <div id="videos-list" 
+                <div id="videos-list"
                      hx-get="/admin/channels/{{ channel.id }}/videos"
                      hx-trigger="load"
                      hx-swap="innerHTML">
@@ -247,8 +247,8 @@
             <div x-show="activeTab === 'ideas'" class="space-y-4">
                 <div class="flex justify-between items-center">
                     <h3 class="text-lg font-medium text-gray-900 dark:text-white">Generated Ideas</h3>
-                    <button 
-                        class="text-sm text-primary-600 hover:text-primary-500"
+                    <button
+                        class="px-3 py-1 text-sm text-primary-600 hover:text-primary-500"
                         hx-get="/admin/channels/{{ channel.id }}/ideas"
                         hx-target="#ideas-list"
                         hx-swap="innerHTML"
@@ -257,7 +257,7 @@
                         Refresh
                     </button>
                 </div>
-                <div id="ideas-list" 
+                <div id="ideas-list"
                      hx-get="/admin/channels/{{ channel.id }}/ideas"
                      hx-trigger="load delay:1s"
                      hx-swap="innerHTML">
@@ -275,23 +275,23 @@
             <!-- Analytics Tab -->
             <div x-show="activeTab === 'analytics'" class="space-y-6">
                 <h3 class="text-lg font-medium text-gray-900 dark:text-white">Channel Analytics</h3>
-                
+
                 <!-- Analytics Charts -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                         <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-4">Video Upload Frequency</h4>
                         <div class="h-64 flex items-center justify-center text-gray-500 dark:text-gray-400">
-                            <div>
+                            <div class="text-center">
                                 <i class="fas fa-chart-bar text-4xl mb-2"></i>
                                 <p>Chart will be implemented with real data</p>
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                         <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-4">Idea Generation Trends</h4>
                         <div class="h-64 flex items-center justify-center text-gray-500 dark:text-gray-400">
-                            <div>
+                            <div class="text-center">
                                 <i class="fas fa-chart-line text-4xl mb-2"></i>
                                 <p>Chart will be implemented with real data</p>
                             </div>
@@ -303,7 +303,7 @@
             <!-- Settings Tab -->
             <div x-show="activeTab === 'settings'" class="space-y-6">
                 <h3 class="text-lg font-medium text-gray-900 dark:text-white">Channel Settings</h3>
-                
+
                 <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                     <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-4">Quick Actions</h4>
                     <div class="grid grid-cols-2 gap-4">

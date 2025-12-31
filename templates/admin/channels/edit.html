@@ -32,8 +32,8 @@
                 </div>
             </div>
             
-            <form 
-                hx-put="/admin/channels/{{ channel.id }}/edit" 
+            <form
+                hx-patch="/admin/channels/{{ channel.id }}"
                 hx-target="#form-container"
                 hx-swap="outerHTML"
                 hx-indicator="#submit-indicator"

@@ -298,6 +298,95 @@ async def delete_channel(
 
 
 # API endpoints for HTMX partial updates
+@router.get("/{channel_id}/videos", response_class=HTMLResponse)
+async def channel_videos_partial(
+    request: Request,
+    channel_id: UUID,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    user = Depends(get_current_user),
+    db = Depends(get_db),
+):
+    """Get channel videos as HTML partial."""
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from app.models.video import Video
+
+    service = ChannelService(db)
+
+    try:
+        # Verify channel exists
+        channel = await service.get_channel(str(channel_id))
+
+        # Query videos for this channel
+        stmt = (
+            select(Video)
+            .where(Video.channel_id == channel_id)
+            .order_by(Video.published_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await db.execute(stmt)
+        videos = result.scalars().all()
+
+        return templates.TemplateResponse(
+            "admin/channels/partials/videos_list.html",
+            {
+                "request": request,
+                "channel": channel,
+                "videos": videos
+            }
+        )
+    except NotFoundException:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+
+@router.get("/{channel_id}/ideas", response_class=HTMLResponse)
+async def channel_ideas_partial(
+    request: Request,
+    channel_id: UUID,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    user = Depends(get_current_user),
+    db = Depends(get_db),
+):
+    """Get channel ideas as HTML partial."""
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from app.models.video import Video
+    from app.models.idea import Idea
+
+    service = ChannelService(db)
+
+    try:
+        # Verify channel exists
+        channel = await service.get_channel(str(channel_id))
+
+        # Query ideas for videos belonging to this channel
+        stmt = (
+            select(Idea)
+            .join(Video, Idea.video_id == Video.id)
+            .where(Video.channel_id == channel_id)
+            .order_by(Idea.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await db.execute(stmt)
+        ideas = result.scalars().all()
+
+        return templates.TemplateResponse(
+            "admin/channels/partials/ideas_list.html",
+            {
+                "request": request,
+                "channel": channel,
+                "ideas": ideas
+            }
+        )
+    except NotFoundException:
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+
+# API endpoints for HTMX partial updates
 @router.get("/partials/channel-card/{channel_id}", response_class=HTMLResponse)
 async def channel_card_partial(
     request: Request,
@@ -307,13 +396,13 @@ async def channel_card_partial(
 ):
     """Get channel card HTML partial for HTMX updates"""
     service = ChannelService(db)
-    
+
     try:
         channel = await service.get_channel(str(channel_id))
         stats = await service._get_channel_stats(str(channel_id))
         channel_dict = channel.to_dict()
         channel_dict["stats"] = stats
-        
+
         return templates.TemplateResponse(
             "admin/channels/partials/channel_card.html",
             {
