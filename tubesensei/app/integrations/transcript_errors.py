@@ -4,8 +4,12 @@ from youtube_transcript_api._errors import (
     TranscriptsDisabled,
     NoTranscriptFound,
     VideoUnavailable,
-    TooManyRequests,
-    NoTranscriptAvailable
+    RequestBlocked,
+    IpBlocked,
+    AgeRestricted,
+    VideoUnplayable,
+    PoTokenRequired,
+    InvalidVideoId
 )
 
 from ..utils.exceptions import YouTubeAPIError
@@ -153,7 +157,7 @@ class TranscriptProcessingError(TranscriptError):
 
 class TranscriptQualityError(TranscriptError):
     """Raised when transcript quality is below threshold."""
-    
+
     def __init__(
         self,
         video_id: str,
@@ -168,6 +172,40 @@ class TranscriptQualityError(TranscriptError):
         self.quality_score = quality_score
         self.threshold = threshold
         self.reason = reason
+
+
+class TranscriptAgeRestrictedError(TranscriptError):
+    """Raised when video is age-restricted and requires authentication."""
+
+    def __init__(self, video_id: str, original_error: Optional[Exception] = None):
+        message = f"Video {video_id} is age-restricted and requires authentication"
+        super().__init__(message, video_id=video_id, original_error=original_error)
+
+
+class TranscriptBlockedError(TranscriptError):
+    """Raised when YouTube blocks the request (IP blocked or request blocked)."""
+
+    def __init__(
+        self,
+        video_id: Optional[str] = None,
+        reason: Optional[str] = None,
+        original_error: Optional[Exception] = None
+    ):
+        message = "Request blocked by YouTube"
+        if reason:
+            message += f": {reason}"
+        if video_id:
+            message += f" (video: {video_id})"
+        super().__init__(message, video_id=video_id, original_error=original_error)
+        self.reason = reason
+
+
+class TranscriptPoTokenRequiredError(TranscriptError):
+    """Raised when YouTube requires a PO Token for retrieval."""
+
+    def __init__(self, video_id: str, original_error: Optional[Exception] = None):
+        message = f"Video {video_id} requires a PO Token for transcript retrieval"
+        super().__init__(message, video_id=video_id, original_error=original_error)
 
 
 async def handle_transcript_error(
@@ -201,11 +239,7 @@ async def handle_transcript_error(
             available_languages=available_languages,
             original_error=error
         )
-    
-    elif isinstance(error, NoTranscriptAvailable):
-        logger.warning(f"No transcript available for video {video_id}")
-        return TranscriptNotAvailableError(video_id=video_id, original_error=error)
-    
+
     elif isinstance(error, VideoUnavailable):
         logger.warning(f"Video unavailable: {video_id}")
         reason = str(error) if str(error) else None
@@ -215,12 +249,42 @@ async def handle_transcript_error(
             original_error=error
         )
     
-    elif isinstance(error, TooManyRequests):
-        logger.warning(f"Rate limited for video {video_id}")
-        retry_after = context.get('retry_after', 60)
-        return TranscriptRateLimitError(
+    elif isinstance(error, (RequestBlocked, IpBlocked)):
+        logger.warning(f"Request blocked by YouTube for video {video_id}")
+        reason = "IP blocked" if isinstance(error, IpBlocked) else "Request blocked"
+        return TranscriptBlockedError(
             video_id=video_id,
-            retry_after=retry_after,
+            reason=reason,
+            original_error=error
+        )
+
+    elif isinstance(error, AgeRestricted):
+        logger.warning(f"Age-restricted video {video_id}")
+        return TranscriptAgeRestrictedError(
+            video_id=video_id,
+            original_error=error
+        )
+
+    elif isinstance(error, VideoUnplayable):
+        logger.warning(f"Video unplayable: {video_id}")
+        reason = str(error) if str(error) else "Video cannot be played"
+        return TranscriptVideoUnavailableError(
+            video_id=video_id,
+            reason=reason,
+            original_error=error
+        )
+
+    elif isinstance(error, PoTokenRequired):
+        logger.warning(f"PO Token required for video {video_id}")
+        return TranscriptPoTokenRequiredError(
+            video_id=video_id,
+            original_error=error
+        )
+
+    elif isinstance(error, InvalidVideoId):
+        logger.warning(f"Invalid video ID: {video_id}")
+        return TranscriptNotAvailableError(
+            video_id=video_id,
             original_error=error
         )
     
@@ -251,10 +315,10 @@ async def handle_transcript_error(
 def is_retryable_error(error: TranscriptError) -> bool:
     """
     Determine if an error is retryable.
-    
+
     Args:
         error: The transcript error
-        
+
     Returns:
         True if the error is retryable
     """
@@ -263,14 +327,17 @@ def is_retryable_error(error: TranscriptError) -> bool:
         TranscriptDisabledError,
         TranscriptNotAvailableError,
         TranscriptVideoUnavailableError,
-        TranscriptQualityError
+        TranscriptQualityError,
+        TranscriptAgeRestrictedError,
+        TranscriptPoTokenRequiredError
     )
-    
+
     # These errors might be temporary
     retryable = (
         TranscriptTimeoutError,
         TranscriptRateLimitError,
-        TranscriptProcessingError
+        TranscriptProcessingError,
+        TranscriptBlockedError  # May be temporary with proxy rotation
     )
     
     if isinstance(error, non_retryable):
@@ -295,15 +362,17 @@ def get_retry_delay(error: TranscriptError, attempt: int = 1) -> int:
     """
     if isinstance(error, TranscriptRateLimitError) and error.retry_after:
         return error.retry_after
-    
+
     # Exponential backoff: 2^attempt * base_delay
     base_delay = 5
     max_delay = 300  # 5 minutes
-    
+
     if isinstance(error, TranscriptTimeoutError):
         base_delay = 10  # Longer delay for timeouts
     elif isinstance(error, TranscriptRateLimitError):
         base_delay = 30  # Even longer for rate limits
-    
+    elif isinstance(error, TranscriptBlockedError):
+        base_delay = 60  # Longer delay for IP blocks (may need proxy rotation)
+
     delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
     return delay

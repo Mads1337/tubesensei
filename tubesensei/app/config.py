@@ -115,6 +115,36 @@ class Settings(BaseSettings):
         description="Minimum quality score threshold for transcripts"
     )
 
+    # Transcript Proxy Configuration (for avoiding IP blocks)
+    TRANSCRIPT_PROXY_ENABLED: bool = Field(
+        default=False,
+        description="Enable proxy for transcript API requests"
+    )
+    TRANSCRIPT_PROXY_TYPE: str = Field(
+        default="generic",
+        description="Proxy type: 'generic' or 'webshare'"
+    )
+    TRANSCRIPT_PROXY_HTTP_URL: Optional[str] = Field(
+        default=None,
+        description="HTTP proxy URL (for generic proxy)"
+    )
+    TRANSCRIPT_PROXY_HTTPS_URL: Optional[str] = Field(
+        default=None,
+        description="HTTPS proxy URL (for generic proxy)"
+    )
+    TRANSCRIPT_WEBSHARE_USERNAME: Optional[str] = Field(
+        default=None,
+        description="Webshare proxy username"
+    )
+    TRANSCRIPT_WEBSHARE_PASSWORD: Optional[str] = Field(
+        default=None,
+        description="Webshare proxy password"
+    )
+    TRANSCRIPT_WEBSHARE_IP_LOCATIONS: List[str] = Field(
+        default=[],
+        description="Filter Webshare IPs by country codes (e.g., ['us', 'de'])"
+    )
+
     # Celery Configuration
     CELERY_BROKER_URL: str = Field(
         default="redis://localhost:6379/0",

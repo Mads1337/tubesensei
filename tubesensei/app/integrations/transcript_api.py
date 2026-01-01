@@ -11,11 +11,13 @@ from tenacity import (
     before_sleep_log
 )
 from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api.proxies import GenericProxyConfig, WebshareProxyConfig
 from youtube_transcript_api._errors import (
     TranscriptsDisabled,
     NoTranscriptFound,
     VideoUnavailable,
-    TooManyRequests
+    RequestBlocked,
+    IpBlocked
 )
 
 from ..config import settings
@@ -55,19 +57,40 @@ class TranscriptAPIClient:
         self.timeout_seconds = timeout_seconds or settings.TRANSCRIPT_TIMEOUT_SECONDS
         self.max_retries = max_retries or settings.TRANSCRIPT_MAX_RETRIES
         self.preferred_languages = preferred_languages or settings.TRANSCRIPT_PREFERRED_LANGUAGES
-        
+
         # Track rate limiting
         self._last_request_time = 0
         self._min_request_interval = 0.5  # Minimum seconds between requests
-        
+
         # Statistics
         self._request_count = 0
         self._success_count = 0
         self._error_count = 0
-        
+
+        # Setup proxy configuration
+        proxy_config = None
+        if settings.TRANSCRIPT_PROXY_ENABLED:
+            if settings.TRANSCRIPT_PROXY_TYPE == "webshare":
+                proxy_config = WebshareProxyConfig(
+                    proxy_username=settings.TRANSCRIPT_WEBSHARE_USERNAME,
+                    proxy_password=settings.TRANSCRIPT_WEBSHARE_PASSWORD,
+                    filter_ip_locations=settings.TRANSCRIPT_WEBSHARE_IP_LOCATIONS or None,
+                )
+                logger.info("Using Webshare rotating proxy for transcript API")
+            elif settings.TRANSCRIPT_PROXY_TYPE == "generic":
+                proxy_config = GenericProxyConfig(
+                    http_url=settings.TRANSCRIPT_PROXY_HTTP_URL,
+                    https_url=settings.TRANSCRIPT_PROXY_HTTPS_URL,
+                )
+                logger.info("Using generic proxy for transcript API")
+
+        # Create YouTube Transcript API instance
+        self._api = YouTubeTranscriptApi(proxy_config=proxy_config)
+
         logger.info(
             f"Initialized TranscriptAPIClient with timeout={self.timeout_seconds}s, "
-            f"max_retries={self.max_retries}, languages={self.preferred_languages}"
+            f"max_retries={self.max_retries}, languages={self.preferred_languages}, "
+            f"proxy_enabled={settings.TRANSCRIPT_PROXY_ENABLED}"
         )
     
     async def _rate_limit(self):
@@ -145,7 +168,7 @@ class TranscriptAPIClient:
         try:
             # Try to get transcript with preferred languages
             transcript_list = await self._execute_with_timeout(
-                YouTubeTranscriptApi.list_transcripts,
+                self._api.list,
                 youtube_video_id
             )
             
@@ -206,10 +229,13 @@ class TranscriptAPIClient:
                 )
             
             # Fetch the actual transcript content
-            transcript_data = await self._execute_with_timeout(
+            fetched_transcript = await self._execute_with_timeout(
                 transcript.fetch
             )
-            
+
+            # Convert FetchedTranscript to raw data for backward compatibility
+            transcript_data = fetched_transcript.to_raw_data()
+
             # Convert to our data model
             segments = [
                 TranscriptSegment(
@@ -219,7 +245,7 @@ class TranscriptAPIClient:
                 )
                 for segment in transcript_data
             ]
-            
+
             # Combine all text
             full_text = ' '.join(segment['text'] for segment in transcript_data)
             
@@ -278,10 +304,10 @@ class TranscriptAPIClient:
         
         try:
             transcript_list = await self._execute_with_timeout(
-                YouTubeTranscriptApi.list_transcripts,
+                self._api.list,
                 youtube_video_id
             )
-            
+
             transcripts = []
             for transcript in transcript_list:
                 transcripts.append(TranscriptInfo(

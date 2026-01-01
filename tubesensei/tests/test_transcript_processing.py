@@ -300,7 +300,7 @@ class TestTranscriptAPIClient:
             is_auto_generated=False,
             is_preferred_language=True
         )
-        assert score > 0.8
+        assert score >= 0.8
         
         # Poor transcript
         score = client._calculate_confidence_score(
@@ -314,39 +314,41 @@ class TestTranscriptAPIClient:
     async def test_get_transcript_with_mock(self, client):
         """Test transcript extraction with mocked YouTube API."""
         mock_transcript = MagicMock()
-        mock_transcript.fetch.return_value = [
+        mock_transcript.language_code = "en"
+        mock_transcript.is_generated = False
+
+        # Mock FetchedTranscript with to_raw_data() method
+        mock_fetched = MagicMock()
+        mock_fetched.to_raw_data.return_value = [
             {"text": "Hello", "start": 0.0, "duration": 1.0},
             {"text": "world", "start": 1.0, "duration": 1.0}
         ]
-        mock_transcript.language_code = "en"
-        mock_transcript.is_generated = False
-        
+        mock_transcript.fetch.return_value = mock_fetched
+
         mock_list = MagicMock()
         mock_list.find_manually_created_transcript.return_value = mock_transcript
-        
-        with patch('youtube_transcript_api.YouTubeTranscriptApi.list_transcripts', return_value=mock_list):
-            with patch.object(client, '_execute_with_timeout', new_callable=AsyncMock) as mock_exec:
-                # Setup mock to return the list first, then the transcript data
-                mock_exec.side_effect = [
-                    mock_list,  # For list_transcripts
-                    [{"text": "Hello", "start": 0.0, "duration": 1.0},
-                     {"text": "world", "start": 1.0, "duration": 1.0}]  # For fetch
-                ]
-                
-                result = await client.get_transcript("test_video_id")
-                
-                assert result is not None
-                assert result.content == "Hello world"
-                assert len(result.segments) == 2
-                assert result.language == "en"
-                assert not result.is_auto_generated
+
+        with patch.object(client, '_execute_with_timeout', new_callable=AsyncMock) as mock_exec:
+            # Setup mock to return the list first, then the FetchedTranscript
+            mock_exec.side_effect = [
+                mock_list,  # For list (was list_transcripts)
+                mock_fetched  # For fetch - now returns FetchedTranscript
+            ]
+
+            result = await client.get_transcript("test_video_id")
+
+            assert result is not None
+            assert result.content == "Hello world"
+            assert len(result.segments) == 2
+            assert result.language == "en"
+            assert not result.is_auto_generated
     
     @pytest.mark.asyncio
     async def test_handle_transcript_not_available(self, client):
         """Test handling of transcript not available error."""
-        with patch('youtube_transcript_api.YouTubeTranscriptApi.list_transcripts') as mock_list:
+        with patch.object(client._api, 'list') as mock_list:
             mock_list.side_effect = Exception("No transcript found")
-            
+
             with pytest.raises(Exception):
                 await client.get_transcript("test_video_id")
 

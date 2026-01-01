@@ -381,6 +381,107 @@ class TopicDiscoveryService:
         logger.info(f"Cancelled topic campaign: {campaign_id}")
         return campaign
 
+    # Transcription stats
+
+    async def get_transcription_stats(self, campaign_id: UUID) -> Dict[str, Any]:
+        """
+        Get detailed transcription statistics for a campaign.
+
+        Args:
+            campaign_id: Campaign to get stats for
+
+        Returns:
+            Dict with transcription progress stats including:
+            - total_relevant: Total relevant videos to process
+            - extracted: Videos with transcripts extracted
+            - failed: Videos where extraction failed
+            - pending: Videos awaiting extraction
+            - recent_videos: Last 10 processed videos with details
+        """
+        from sqlalchemy import case
+
+        campaign = await self.get_campaign(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        # Query for detailed transcription stats
+        result = await self.db.execute(
+            select(
+                func.count(CampaignVideo.id).label('total_relevant'),
+                func.count(case((CampaignVideo.transcript_extracted == True, 1))).label('extracted'),
+                func.count(case((
+                    (CampaignVideo.transcript_extracted == False) &
+                    (CampaignVideo.transcript_extracted_at != None), 1
+                ))).label('failed'),
+                func.count(case((
+                    (CampaignVideo.transcript_extracted == False) &
+                    (CampaignVideo.transcript_extracted_at == None), 1
+                ))).label('pending'),
+            )
+            .where(
+                CampaignVideo.campaign_id == campaign_id,
+                CampaignVideo.is_topic_relevant == True,
+            )
+        )
+        row = result.first()
+
+        # Get recently processed videos (last 10)
+        recent_result = await self.db.execute(
+            select(CampaignVideo, Video)
+            .join(Video, CampaignVideo.video_id == Video.id)
+            .where(
+                CampaignVideo.campaign_id == campaign_id,
+                CampaignVideo.is_topic_relevant == True,
+                CampaignVideo.transcript_extracted_at != None,
+            )
+            .order_by(desc(CampaignVideo.transcript_extracted_at))
+            .limit(10)
+        )
+
+        recent_videos = []
+        for cv, video in recent_result.all():
+            # Get word count from transcript if available
+            word_count = None
+            if cv.transcript_extracted and video.transcript_id:
+                from app.models.transcript import Transcript
+                transcript_result = await self.db.execute(
+                    select(Transcript).where(Transcript.id == video.transcript_id)
+                )
+                transcript = transcript_result.scalar_one_or_none()
+                if transcript and transcript.full_text:
+                    word_count = len(transcript.full_text.split())
+
+            recent_videos.append({
+                "video_id": str(video.id),
+                "youtube_id": video.youtube_id,
+                "title": video.title,
+                "extracted_at": cv.transcript_extracted_at.isoformat() if cv.transcript_extracted_at else None,
+                "success": cv.transcript_extracted,
+                "word_count": word_count,
+                "error": None if cv.transcript_extracted else "Extraction failed",
+            })
+
+        total_relevant = row.total_relevant if row else 0
+        extracted = row.extracted if row else 0
+
+        return {
+            "campaign_id": str(campaign_id),
+            "stage": campaign.campaign_metadata.get("stage") if campaign.campaign_metadata else None,
+            "total_relevant": total_relevant,
+            "extracted": extracted,
+            "failed": row.failed if row else 0,
+            "pending": row.pending if row else 0,
+            "progress_percent": (extracted / total_relevant * 100) if total_relevant > 0 else 0,
+            "recent_videos": recent_videos,
+            "is_active": (
+                campaign.status == CampaignStatus.RUNNING and
+                campaign.campaign_metadata is not None and
+                campaign.campaign_metadata.get("stage") == "transcription"
+            ),
+            "is_paused": campaign.status == CampaignStatus.PAUSED,
+            "api_calls": campaign.api_calls_made or 0,
+        }
+
     # Stale campaign detection and recovery
 
     async def get_stale_campaigns(self, stale_minutes: int = 10) -> List[TopicCampaign]:

@@ -7,10 +7,9 @@ import logging
 
 import redis.asyncio as aioredis
 
-from app.core.auth import auth_handler
 from app.services.monitoring_service import MonitoringService
 from app.database import get_db
-from app.config import settings
+from app.core.config import settings
 
 
 router = APIRouter()

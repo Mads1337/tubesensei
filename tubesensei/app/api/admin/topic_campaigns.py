@@ -459,3 +459,45 @@ async def get_stale_status(
             "task_alive": task_alive,
         }
     )
+
+
+@router.get("/{campaign_id}/transcription", response_class=HTMLResponse)
+async def get_transcription_tab(
+    request: Request,
+    campaign_id: UUID,
+    user = Depends(get_current_user),
+    service: TopicDiscoveryService = Depends(get_topic_discovery_service),
+):
+    """
+    Get the transcription monitoring tab partial.
+
+    Returns an HTML partial with real-time transcription stats and controls.
+    """
+    campaign = await service.get_campaign(campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    try:
+        stats = await service.get_transcription_stats(campaign_id)
+    except Exception as e:
+        logger.error(f"Error getting transcription stats for {campaign_id}: {e}")
+        stats = {
+            "total_relevant": 0,
+            "extracted": 0,
+            "failed": 0,
+            "pending": 0,
+            "progress_percent": 0,
+            "recent_videos": [],
+            "is_active": False,
+            "is_paused": False,
+        }
+
+    return templates.TemplateResponse(
+        "admin/topic_campaigns/partials/transcription_tab.html",
+        {
+            "request": request,
+            "campaign": campaign,
+            "campaign_id": str(campaign_id),
+            "stats": stats,
+        }
+    )

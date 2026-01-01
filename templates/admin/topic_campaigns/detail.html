@@ -236,6 +236,12 @@
                     <i class="fas fa-cog mr-2"></i>
                     Configuration
                 </button>
+                <button @click="activeTab = 'transcription'"
+                    :class="activeTab === 'transcription' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                    <i class="fas fa-file-alt mr-2"></i>
+                    Transcription
+                </button>
             </nav>
         </div>
 
@@ -387,6 +393,25 @@
                         </div>
                         {% endif %}
                     </dl>
+                </div>
+            </div>
+
+            <!-- Transcription Tab -->
+            <div x-show="activeTab === 'transcription'" class="w-full">
+                <div id="transcription-container"
+                     hx-get="/admin/topic-campaigns/{{ campaign.id }}/transcription"
+                     hx-trigger="load delay:300ms"
+                     hx-swap="innerHTML">
+                    <div class="animate-pulse space-y-4">
+                        <div class="grid grid-cols-4 gap-4">
+                            <div class="h-20 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                            <div class="h-20 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                            <div class="h-20 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                            <div class="h-20 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                        </div>
+                        <div class="h-16 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                        <div class="h-48 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                    </div>
                 </div>
             </div>
         </div>

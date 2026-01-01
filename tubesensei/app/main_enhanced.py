@@ -26,6 +26,7 @@ from app.database import get_db as get_session, init_db, close_db
 from app.api.admin import router as admin_router
 # from app.api.auth import router as auth_router
 from app.api.v1 import router as api_v1_router
+from app.api.websocket import router as websocket_router
 
 # Setup enhanced logging
 from app.utils.logging import setup_logging
@@ -231,6 +232,14 @@ if hasattr(app, 'state'):
         safe_log_info("API v1 router included")
     except ImportError:
         safe_log_warning("API v1 router not yet implemented")
+
+# WebSocket routes
+if hasattr(app, 'state'):
+    try:
+        app.include_router(websocket_router, tags=["websocket"])
+        safe_log_info("WebSocket router included")
+    except ImportError:
+        safe_log_warning("WebSocket router not yet implemented")
 
 # Root endpoint
 @app.get("/", response_class=HTMLResponse)

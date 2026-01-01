@@ -1,0 +1,351 @@
+<!-- Transcription Monitoring Tab Partial -->
+<div class="space-y-6"
+     x-data="transcriptionMonitor('{{ campaign_id }}')"
+     x-init="init()">
+
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div class="text-2xl font-bold text-gray-600 dark:text-gray-400" x-text="stats.pending">{{ stats.pending }}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Pending</div>
+        </div>
+        <div class="text-center p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
+            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400" x-text="stats.inFlight">0</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">In Flight</div>
+        </div>
+        <div class="text-center p-4 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-200 dark:border-green-700">
+            <div class="text-2xl font-bold text-green-600 dark:text-green-400" x-text="stats.extracted">{{ stats.extracted }}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Extracted</div>
+        </div>
+        <div class="text-center p-4 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-700">
+            <div class="text-2xl font-bold text-red-600 dark:text-red-400" x-text="stats.failed">{{ stats.failed }}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Failed</div>
+        </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+        <div class="flex justify-between mb-2">
+            <span class="text-sm text-gray-600 dark:text-gray-400">Transcription Progress</span>
+            <span class="text-sm font-medium text-gray-900 dark:text-gray-100" x-text="stats.progressPercent.toFixed(1) + '%'">{{ "%.1f"|format(stats.progress_percent) }}%</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+            <div class="bg-indigo-600 h-3 rounded-full transition-all duration-500"
+                 :style="'width: ' + stats.progressPercent + '%'"
+                 style="width: {{ stats.progress_percent }}%"></div>
+        </div>
+        <div class="mt-2 text-xs text-gray-500 dark:text-gray-400" x-text="stats.lastMessage">
+            {% if stats.is_active %}Processing...{% elif stats.is_paused %}Paused{% else %}Waiting to start{% endif %}
+        </div>
+    </div>
+
+    <!-- Control Buttons -->
+    <div class="flex flex-wrap gap-3">
+        <!-- Start button - when not active and not paused -->
+        <template x-if="!isActive && !isPaused && stats.pending > 0">
+            <button @click="startTranscription()"
+                    class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors">
+                <i class="fas fa-play mr-2"></i> Start Transcription
+            </button>
+        </template>
+
+        <!-- Pause button - when active -->
+        <template x-if="isActive && !isPaused">
+            <button @click="pauseTranscription()"
+                    class="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition-colors">
+                <i class="fas fa-pause mr-2"></i> Pause
+            </button>
+        </template>
+
+        <!-- Resume button - when paused -->
+        <template x-if="isPaused">
+            <button @click="resumeTranscription()"
+                    class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
+                <i class="fas fa-play mr-2"></i> Resume
+            </button>
+        </template>
+
+        <!-- Cancel button - when active or paused -->
+        <template x-if="isActive || isPaused">
+            <button @click="cancelTranscription()"
+                    class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors">
+                <i class="fas fa-stop mr-2"></i> Cancel
+            </button>
+        </template>
+
+        <!-- Refresh button -->
+        <button @click="fetchStats()"
+                class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+            <i class="fas fa-sync-alt mr-2"></i> Refresh
+        </button>
+    </div>
+
+    <!-- Recent Activity Log -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                <i class="fas fa-history mr-2"></i>Recent Activity
+            </h4>
+        </div>
+        <div class="max-h-96 overflow-y-auto" id="activity-log">
+            <!-- Dynamic items from JS -->
+            <template x-for="item in recentActivity" :key="item.id">
+                <div class="flex items-center px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                     :class="item.success ? 'bg-green-50/50 dark:bg-green-900/10' : 'bg-red-50/50 dark:bg-red-900/10'">
+                    <div class="flex-shrink-0 mr-3">
+                        <i :class="item.success ? 'fas fa-check-circle text-green-500' : 'fas fa-times-circle text-red-500'"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" x-text="item.title"></p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                            <span x-show="item.success && item.wordCount" x-text="item.wordCount + ' words'"></span>
+                            <span x-show="!item.success && item.error" x-text="item.error" class="text-red-500"></span>
+                        </p>
+                    </div>
+                    <div class="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500" x-text="item.time"></div>
+                </div>
+            </template>
+
+            <!-- Empty state -->
+            <template x-if="recentActivity.length === 0">
+                <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <i class="fas fa-inbox text-3xl mb-2"></i>
+                    <p>No recent activity</p>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Server-rendered initial data (hidden, for fallback) -->
+    <div class="hidden" id="initial-stats"
+         data-stats='{{ stats | tojson }}'></div>
+</div>
+
+<script>
+function transcriptionMonitor(campaignId) {
+    return {
+        campaignId: campaignId,
+        ws: null,
+        wsReconnectAttempts: 0,
+        maxReconnectAttempts: 5,
+        pollingInterval: null,
+        isActive: {{ 'true' if stats.is_active else 'false' }},
+        isPaused: {{ 'true' if stats.is_paused else 'false' }},
+        stats: {
+            pending: {{ stats.pending }},
+            inFlight: 0,
+            extracted: {{ stats.extracted }},
+            failed: {{ stats.failed }},
+            progressPercent: {{ stats.progress_percent }},
+            lastMessage: '{% if stats.is_active %}Processing...{% elif stats.is_paused %}Paused{% else %}Waiting to start{% endif %}',
+        },
+        recentActivity: [
+            {% for video in stats.recent_videos %}
+            {
+                id: '{{ video.video_id }}',
+                title: '{{ video.title | replace("'", "\\'") | replace("\n", " ") }}',
+                success: {{ 'true' if video.success else 'false' }},
+                wordCount: {{ video.word_count if video.word_count else 'null' }},
+                error: {{ ("'" + video.error + "'") if video.error else 'null' }},
+                time: '{{ video.extracted_at[:16] if video.extracted_at else "" }}',
+            },
+            {% endfor %}
+        ],
+
+        init() {
+            this.connectWebSocket();
+            // Start polling as fallback
+            this.startPolling();
+        },
+
+        async fetchStats() {
+            try {
+                const response = await fetch(`/api/v1/topic-campaigns/${this.campaignId}/transcription/stats`);
+                if (response.ok) {
+                    const data = await response.json();
+                    this.stats.pending = data.pending;
+                    this.stats.extracted = data.extracted;
+                    this.stats.failed = data.failed;
+                    this.stats.progressPercent = data.progress_percent;
+                    this.isActive = data.is_active;
+                    this.isPaused = data.is_paused;
+
+                    // Update recent activity
+                    if (data.recent_videos && data.recent_videos.length > 0) {
+                        this.recentActivity = data.recent_videos.map(v => ({
+                            id: v.video_id,
+                            title: v.title,
+                            success: v.success,
+                            wordCount: v.word_count,
+                            error: v.error,
+                            time: v.extracted_at ? v.extracted_at.substring(0, 16) : '',
+                        }));
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to fetch transcription stats:', e);
+            }
+        },
+
+        connectWebSocket() {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/campaigns/${this.campaignId}`;
+
+            try {
+                this.ws = new WebSocket(wsUrl);
+
+                this.ws.onopen = () => {
+                    console.log('Transcription WebSocket connected');
+                    this.wsReconnectAttempts = 0;
+                };
+
+                this.ws.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+                    this.handleMessage(message);
+                };
+
+                this.ws.onclose = () => {
+                    if (this.wsReconnectAttempts < this.maxReconnectAttempts) {
+                        this.wsReconnectAttempts++;
+                        setTimeout(() => this.connectWebSocket(), 2000 * this.wsReconnectAttempts);
+                    }
+                };
+
+                this.ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                };
+            } catch (e) {
+                console.error('WebSocket connection failed:', e);
+            }
+        },
+
+        handleMessage(message) {
+            if (message.type === 'campaign_update' && message.data) {
+                const data = message.data;
+
+                // Update stats from progress events
+                if (data.type === 'PROGRESS' || data.type === 'progress') {
+                    this.stats.lastMessage = data.message || '';
+                    if (data.progress !== undefined) {
+                        this.stats.progressPercent = data.progress;
+                    }
+                    if (data.data) {
+                        this.stats.extracted = data.data.success_count || this.stats.extracted;
+                        this.stats.failed = data.data.failed_count || this.stats.failed;
+                        this.stats.pending = data.data.remaining || this.stats.pending;
+                    }
+                }
+
+                // Add to activity log for item events
+                if (data.type === 'ITEM_PROCESSED' || data.type === 'item_processed') {
+                    const itemData = data.data || {};
+                    this.recentActivity.unshift({
+                        id: itemData.video_id || Date.now().toString(),
+                        title: itemData.video_title || data.message || 'Unknown video',
+                        success: itemData.success ?? true,
+                        wordCount: itemData.word_count || null,
+                        error: itemData.error || null,
+                        time: new Date().toLocaleTimeString(),
+                    });
+                    // Keep only last 50 items
+                    this.recentActivity = this.recentActivity.slice(0, 50);
+                }
+            }
+
+            if (message.type === 'heartbeat') {
+                // Refresh full stats on heartbeat
+                this.fetchStats();
+            }
+        },
+
+        startPolling() {
+            // Poll every 10 seconds as fallback
+            this.pollingInterval = setInterval(() => {
+                if (this.isActive) {
+                    this.fetchStats();
+                }
+            }, 10000);
+        },
+
+        async startTranscription() {
+            try {
+                const response = await fetch(`/api/v1/topic-campaigns/${this.campaignId}/transcription/start`, { method: 'POST' });
+                if (response.ok) {
+                    showToast('Transcription started!', 'success');
+                    this.isActive = true;
+                    this.fetchStats();
+                } else {
+                    const error = await response.json();
+                    showToast(error.detail || 'Failed to start transcription', 'error');
+                }
+            } catch (e) {
+                showToast('Failed to start transcription', 'error');
+            }
+        },
+
+        async pauseTranscription() {
+            try {
+                const response = await fetch(`/api/v1/topic-campaigns/${this.campaignId}/pause`, { method: 'POST' });
+                if (response.ok) {
+                    showToast('Transcription paused', 'warning');
+                    this.isActive = false;
+                    this.isPaused = true;
+                    this.stats.lastMessage = 'Paused';
+                } else {
+                    const error = await response.json();
+                    showToast(error.detail || 'Failed to pause', 'error');
+                }
+            } catch (e) {
+                showToast('Failed to pause transcription', 'error');
+            }
+        },
+
+        async resumeTranscription() {
+            try {
+                const response = await fetch(`/api/v1/topic-campaigns/${this.campaignId}/transcription/resume`, { method: 'POST' });
+                if (response.ok) {
+                    showToast('Transcription resumed!', 'success');
+                    this.isActive = true;
+                    this.isPaused = false;
+                    this.stats.lastMessage = 'Resuming...';
+                    this.fetchStats();
+                } else {
+                    const error = await response.json();
+                    showToast(error.detail || 'Failed to resume', 'error');
+                }
+            } catch (e) {
+                showToast('Failed to resume transcription', 'error');
+            }
+        },
+
+        async cancelTranscription() {
+            if (!confirm('Cancel transcription? Progress will be saved and you can resume later.')) {
+                return;
+            }
+            try {
+                const response = await fetch(`/api/v1/topic-campaigns/${this.campaignId}/cancel`, { method: 'POST' });
+                if (response.ok) {
+                    showToast('Transcription cancelled', 'warning');
+                    this.isActive = false;
+                    this.isPaused = false;
+                    this.stats.lastMessage = 'Cancelled';
+                } else {
+                    const error = await response.json();
+                    showToast(error.detail || 'Failed to cancel', 'error');
+                }
+            } catch (e) {
+                showToast('Failed to cancel transcription', 'error');
+            }
+        },
+
+        destroy() {
+            if (this.ws) {
+                this.ws.close();
+            }
+            if (this.pollingInterval) {
+                clearInterval(this.pollingInterval);
+            }
+        }
+    };
+}
+</script>

@@ -496,18 +496,39 @@ async def resume_transcription(
     user = Depends(require_permission(Permission.CHANNEL_WRITE)),
     service: TopicDiscoveryService = Depends(get_topic_discovery_service),
 ):
-    """Resume transcription extraction."""
+    """Resume transcription extraction.
+
+    Supports resuming from both paused and cancelled states when in transcription stage.
+    """
     try:
-        # Check if it was in transcription stage
         campaign = await service.get_campaign(campaign_id)
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
-            
-        # We can reuse resume_campaign from service logic if we are careful,
-        # or just set status to RUNNING and queue task.
-        campaign = await service.resume_campaign(campaign_id)
-        
-        # Queue the transcription task AGAIN (it will pick up where it left off)
+
+        # Check if campaign is in transcription stage
+        stage = campaign.campaign_metadata.get("stage") if campaign.campaign_metadata else None
+        if stage != "transcription":
+            raise HTTPException(
+                status_code=400,
+                detail="Campaign is not in transcription stage"
+            )
+
+        # Handle cancelled campaigns - allow restart from cancelled status
+        if campaign.status == DBCampaignStatus.CANCELLED:
+            campaign.status = DBCampaignStatus.RUNNING
+            campaign.cancelled_at = None
+            await service.db.commit()
+            await service.db.refresh(campaign)
+        elif campaign.status == DBCampaignStatus.PAUSED:
+            # Use normal resume for paused campaigns
+            campaign = await service.resume_campaign(campaign_id)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot resume transcription from {campaign.status.value} status"
+            )
+
+        # Queue the transcription task (it will pick up where it left off)
         task = run_transcription_campaign_task.delay(str(campaign_id))
 
         return CampaignActionResponse(
@@ -552,6 +573,25 @@ async def retry_transcription(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{campaign_id}/transcription/stats")
+async def get_transcription_stats(
+    campaign_id: UUID,
+    user = Depends(require_permission(Permission.CHANNEL_READ)),
+    service: TopicDiscoveryService = Depends(get_topic_discovery_service),
+):
+    """
+    Get detailed transcription statistics for a campaign.
+
+    Returns progress stats including extracted/pending/failed counts
+    and recent activity log with video details.
+    """
+    try:
+        stats = await service.get_transcription_stats(campaign_id)
+        return stats
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # Bulk Operations

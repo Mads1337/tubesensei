@@ -9,6 +9,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Create a shared API instance for transcript extraction
+_transcript_api = YouTubeTranscriptApi()
+
 
 class YouTubeTranscriptToolInput(BaseModel):
     """Input schema for YouTubeTranscriptTool."""
@@ -35,15 +38,16 @@ class YouTubeTranscriptTool(BaseTool):
             video_id = self._extract_video_id(youtube_url)
             if not video_id:
                 return "Error: Could not extract video ID from the provided URL"
-            
-            # Get transcript
-            transcript = YouTubeTranscriptApi.get_transcript(video_id)
-            
+
+            # Get transcript using instance-based API
+            fetched = _transcript_api.fetch(video_id)
+            transcript = fetched.to_raw_data()
+
             # Format transcript into readable text
             formatted_transcript = self._format_transcript(transcript)
-            
+
             return formatted_transcript
-            
+
         except Exception as e:
             return f"Error retrieving transcript: {str(e)}"
     
@@ -76,12 +80,13 @@ class YouTubeTranscriptTool(BaseTool):
             # Run the blocking transcript extraction in a thread pool
             loop = asyncio.get_event_loop()
             with concurrent.futures.ThreadPoolExecutor() as executor:
-                transcript = await loop.run_in_executor(
-                    executor, 
-                    YouTubeTranscriptApi.get_transcript, 
+                fetched = await loop.run_in_executor(
+                    executor,
+                    _transcript_api.fetch,
                     video_id
                 )
-            
+            transcript = fetched.to_raw_data()
+
             formatted_transcript = self._format_transcript(transcript)
             return {
                 'video_id': video_id,
@@ -201,12 +206,13 @@ class BatchYouTubeTranscriptTool(BaseTool):
             # Run the blocking transcript extraction in a thread pool
             loop = asyncio.get_event_loop()
             with concurrent.futures.ThreadPoolExecutor() as executor:
-                transcript = await loop.run_in_executor(
-                    executor, 
-                    YouTubeTranscriptApi.get_transcript, 
+                fetched = await loop.run_in_executor(
+                    executor,
+                    _transcript_api.fetch,
                     video_id
                 )
-            
+            transcript = fetched.to_raw_data()
+
             formatted_transcript = self._format_transcript(transcript)
             return {
                 'video_id': video_id,
@@ -221,7 +227,7 @@ class BatchYouTubeTranscriptTool(BaseTool):
                 'success': False,
                 'error': str(e)
             }
-    
+
     def _extract_video_id(self, url: str) -> str:
         """Extract video ID from YouTube URL"""
         patterns = [
@@ -229,13 +235,13 @@ class BatchYouTubeTranscriptTool(BaseTool):
             r'(?:embed\/)([0-9A-Za-z_-]{11})',
             r'(?:watch\?v=)([0-9A-Za-z_-]{11})'
         ]
-        
+
         for pattern in patterns:
             match = re.search(pattern, url)
             if match:
                 return match.group(1)
         return None
-    
+
     def _format_transcript(self, transcript: list) -> str:
         """Format transcript list into readable text"""
         formatted_text = ""

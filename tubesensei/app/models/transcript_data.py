@@ -6,13 +6,13 @@ from uuid import UUID
 
 class TranscriptSegment(BaseModel):
     """Individual transcript segment with timing information."""
-    
+
     text: str = Field(..., description="The transcript text for this segment")
     start: float = Field(..., description="Start time in seconds")
     duration: float = Field(..., description="Duration of segment in seconds")
-    end: float = Field(None, description="End time in seconds")
-    
-    @validator('end', always=True)
+    end: Optional[float] = Field(None, description="End time in seconds")
+
+    @validator('end', always=True, pre=False)
     def calculate_end(cls, v, values):
         if v is None and 'start' in values and 'duration' in values:
             return values['start'] + values['duration']

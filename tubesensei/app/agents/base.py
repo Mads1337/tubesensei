@@ -418,6 +418,38 @@ class BaseAgent(ABC):
         )
         self.context.emit_event(event)
 
+    async def send_event(
+        self,
+        event_type: AgentEventType,
+        message: Optional[str] = None,
+        progress: Optional[float] = None,
+        data: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """
+        Async event emission with Redis pubsub publishing for WebSocket clients.
+
+        Args:
+            event_type: Type of event (PROGRESS, ITEM_PROCESSED, etc.)
+            message: Human-readable message
+            progress: Progress percentage (0-100)
+            data: Additional event data
+        """
+        # Emit via synchronous context handler
+        self._emit_event(event_type, data, message)
+
+        # Publish to Redis for WebSocket clients
+        try:
+            from app.api.websocket import publish_campaign_update
+            await publish_campaign_update(str(self.campaign_id), {
+                "type": event_type.value,
+                "message": message,
+                "progress": progress,
+                "data": data or {},
+                "agent_type": self.agent_type.value,
+            })
+        except Exception as e:
+            logger.warning(f"Failed to publish event to Redis: {e}")
+
     def _get_duration(self) -> float:
         """Get execution duration in seconds."""
         if self._start_time:
