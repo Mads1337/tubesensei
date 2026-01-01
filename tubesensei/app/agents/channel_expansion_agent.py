@@ -163,6 +163,16 @@ class ChannelExpansionAgent(BaseAgent):
                     campaign_channel.mark_limit_reached()
                     break
 
+                # Apply duration filter
+                duration = video_data.get("duration_seconds")
+                if not self._passes_duration_filter(duration):
+                    logger.debug(
+                        f"Video {video_data.get('video_id')} filtered by duration: {duration}s "
+                        f"(min: {self.min_duration_seconds}s, max: {self.max_duration_seconds}s)"
+                    )
+                    self.increment_processed()
+                    continue
+
                 self.update_progress(
                     ((idx + 1) / total_items) * 100,
                     current_item=video_data.get("title", "")[:50]

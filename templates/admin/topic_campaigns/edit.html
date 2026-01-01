@@ -164,6 +164,38 @@
                             >
                             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Recursion depth for related videos</p>
                         </div>
+
+                        <div>
+                            <label for="min_duration_seconds" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Minimum Duration (seconds)
+                            </label>
+                            <input
+                                type="number"
+                                name="min_duration_seconds"
+                                id="min_duration_seconds"
+                                value="{{ campaign.config.get('min_duration_seconds', 60) }}"
+                                min="0"
+                                max="86400"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                            >
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Default: 60s (filters out Shorts)</p>
+                        </div>
+
+                        <div>
+                            <label for="max_duration_seconds" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Maximum Duration (seconds)
+                            </label>
+                            <input
+                                type="number"
+                                name="max_duration_seconds"
+                                id="max_duration_seconds"
+                                value="{{ campaign.config.get('max_duration_seconds', 7200) }}"
+                                min="0"
+                                max="86400"
+                                class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                            >
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Default: 7200s (2 hours)</p>
+                        </div>
                     </div>
 
                     <div>

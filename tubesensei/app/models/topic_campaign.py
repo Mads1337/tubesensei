@@ -191,6 +191,13 @@ class TopicCampaign(BaseModel):
         nullable=True
     )
 
+    # Heartbeat for stale campaign detection
+    last_heartbeat_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Last heartbeat from running worker task"
+    )
+
     # Execution time tracking
     execution_time_seconds = Column(
         Float,
@@ -330,6 +337,24 @@ class TopicCampaign(BaseModel):
     def can_cancel(self) -> bool:
         """Check if campaign can be cancelled."""
         return self.status in [CampaignStatus.RUNNING, CampaignStatus.PAUSED]
+
+    @property
+    def is_stale(self) -> bool:
+        """Check if campaign is stale (RUNNING but no heartbeat for 10+ minutes)."""
+        if self.status != CampaignStatus.RUNNING:
+            return False
+        if not self.last_heartbeat_at:
+            # No heartbeat recorded yet - check if started > 10 min ago
+            if self.started_at:
+                stale_threshold = datetime.now(timezone.utc) - timedelta(minutes=10)
+                return self.started_at < stale_threshold
+            return False
+        stale_threshold = datetime.now(timezone.utc) - timedelta(minutes=10)
+        return self.last_heartbeat_at < stale_threshold
+
+    def heartbeat(self) -> None:
+        """Update heartbeat timestamp to indicate worker is still alive."""
+        self.last_heartbeat_at = datetime.now(timezone.utc)
 
     @property
     def has_reached_limit(self) -> bool:

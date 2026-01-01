@@ -315,6 +315,110 @@ class TopicDiscoveryService:
         logger.info(f"Cancelled topic campaign: {campaign_id}")
         return campaign
 
+    # Stale campaign detection and recovery
+
+    async def get_stale_campaigns(self, stale_minutes: int = 10) -> List[TopicCampaign]:
+        """
+        Get campaigns that are RUNNING but haven't had a heartbeat in X minutes.
+
+        Args:
+            stale_minutes: Minutes without heartbeat to consider stale
+
+        Returns:
+            List of stale campaigns
+        """
+        from datetime import timedelta
+
+        stale_threshold = datetime.now(timezone.utc) - timedelta(minutes=stale_minutes)
+
+        # Get RUNNING campaigns with old or missing heartbeat
+        result = await self.db.execute(
+            select(TopicCampaign)
+            .where(TopicCampaign.status == CampaignStatus.RUNNING)
+            .where(
+                (TopicCampaign.last_heartbeat_at == None) |
+                (TopicCampaign.last_heartbeat_at < stale_threshold)
+            )
+            .order_by(desc(TopicCampaign.started_at))
+        )
+
+        return list(result.scalars().all())
+
+    async def check_campaign_task_alive(self, campaign_id: UUID) -> bool:
+        """
+        Check if the Celery task for this campaign is still active.
+
+        Args:
+            campaign_id: Campaign to check
+
+        Returns:
+            True if task is still active, False otherwise
+        """
+        from app.celery_app import celery_app
+
+        campaign = await self.get_campaign(campaign_id)
+        if not campaign or not campaign.celery_task_id:
+            return False
+
+        try:
+            result = celery_app.AsyncResult(campaign.celery_task_id)
+            # Check if task is in an active state
+            return result.status in ['PENDING', 'STARTED', 'RETRY']
+        except Exception as e:
+            logger.warning(f"Failed to check task status: {e}")
+            return False
+
+    async def recover_stale_campaign(
+        self,
+        campaign_id: UUID,
+        action: str = "fail",
+    ) -> TopicCampaign:
+        """
+        Recover a stale campaign by marking it failed or restarting it.
+
+        Args:
+            campaign_id: Campaign to recover
+            action: "fail" to mark as failed, "restart" to reset and restart
+
+        Returns:
+            Updated campaign
+        """
+        campaign = await self.get_campaign(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        if campaign.status != CampaignStatus.RUNNING:
+            raise ValueError(f"Campaign is not in RUNNING status, current: {campaign.status.value}")
+
+        # Check if it's actually stale
+        if not campaign.is_stale:
+            raise ValueError("Campaign is not stale - it has a recent heartbeat")
+
+        # Check if task is still alive (shouldn't be if stale)
+        task_alive = await self.check_campaign_task_alive(campaign_id)
+        if task_alive:
+            raise ValueError("Campaign task is still active - cannot recover")
+
+        if action == "fail":
+            campaign.fail("Campaign stalled - worker task died unexpectedly")
+            logger.info(f"Marked stale campaign as failed: {campaign_id}")
+        elif action == "restart":
+            # Reset to DRAFT so it can be started again
+            campaign.status = CampaignStatus.DRAFT
+            campaign.error_message = None
+            campaign.error_count = 0
+            campaign.celery_task_id = None
+            campaign.last_heartbeat_at = None
+            # Keep progress data intact for resume
+            logger.info(f"Reset stale campaign for restart: {campaign_id}")
+        else:
+            raise ValueError(f"Invalid action: {action}. Use 'fail' or 'restart'")
+
+        await self.db.commit()
+        await self.db.refresh(campaign)
+
+        return campaign
+
     async def retry_campaign(self, campaign_id: UUID) -> TopicCampaign:
         """
         Retry a failed campaign.

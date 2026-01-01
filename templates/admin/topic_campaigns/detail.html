@@ -141,6 +141,15 @@
         </template>
     </div>
 
+    <!-- Stale Campaign Warning -->
+    {% if campaign.status.value == 'running' %}
+    <div id="stale-status-container"
+         hx-get="/admin/topic-campaigns/{{ campaign.id }}/stale-status"
+         hx-trigger="load delay:2s, every 30s"
+         hx-swap="innerHTML">
+    </div>
+    {% endif %}
+
     <!-- Agent Status Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {% include "admin/topic_campaigns/partials/agent_card.html" with context %}

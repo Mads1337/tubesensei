@@ -384,3 +384,78 @@ async def delete_campaign(
     )
     response.headers["HX-Redirect"] = "/admin/topic-campaigns"
     return response
+
+
+@router.post("/{campaign_id}/recover", response_class=HTMLResponse)
+async def recover_campaign(
+    request: Request,
+    campaign_id: UUID,
+    action: str = Form("fail"),
+    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
+    service: TopicDiscoveryService = Depends(get_topic_discovery_service),
+):
+    """
+    Recover a stalled campaign.
+
+    A campaign is considered stalled if it's in RUNNING status but hasn't
+    had a heartbeat for 10+ minutes and its Celery task is no longer active.
+
+    Actions:
+    - fail: Mark the campaign as FAILED
+    - restart: Reset the campaign to DRAFT so it can be started again
+    """
+    campaign = await service.get_campaign(campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    # Check if campaign is stale
+    if not campaign.is_stale:
+        raise HTTPException(
+            status_code=400,
+            detail="Campaign is not stale - it has a recent heartbeat or is not running"
+        )
+
+    try:
+        campaign = await service.recover_stale_campaign(campaign_id, action)
+        logger.info(f"Recovered stale campaign {campaign_id} with action: {action}")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Return success response with HX-Redirect header
+    action_msg = "marked as failed" if action == "fail" else "reset for restart"
+    response = Response(
+        content=f"<div>Campaign {action_msg} successfully</div>",
+        media_type="text/html",
+    )
+    response.headers["HX-Redirect"] = f"/admin/topic-campaigns/{campaign_id}"
+    return response
+
+
+@router.get("/{campaign_id}/stale-status", response_class=HTMLResponse)
+async def get_stale_status(
+    request: Request,
+    campaign_id: UUID,
+    user = Depends(get_current_user),
+    service: TopicDiscoveryService = Depends(get_topic_discovery_service),
+):
+    """
+    Check if a campaign is stale and return status info.
+
+    Used by the UI to show recovery options.
+    """
+    campaign = await service.get_campaign(campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    is_stale = campaign.is_stale
+    task_alive = await service.check_campaign_task_alive(campaign_id) if is_stale else True
+
+    return templates.TemplateResponse(
+        "admin/topic_campaigns/partials/stale_status.html",
+        {
+            "request": request,
+            "campaign": campaign,
+            "is_stale": is_stale,
+            "task_alive": task_alive,
+        }
+    )

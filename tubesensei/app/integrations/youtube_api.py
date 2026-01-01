@@ -444,27 +444,29 @@ class YouTubeAPIClient:
         channel_id: Optional[str] = None,
         max_results: int = 50,
         order: str = 'relevance',
-        published_after: Optional[datetime] = None
+        published_after: Optional[datetime] = None,
+        video_duration: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Search for videos on YouTube.
-        
+
         Args:
             query: Search query
             channel_id: Limit search to specific channel
             max_results: Maximum results to return
             order: Sort order (relevance, date, rating, viewCount, title)
             published_after: Only return videos published after this date
-            
+            video_duration: Duration filter - 'short' (<4min), 'medium' (4-20min), 'long' (>20min)
+
         Returns:
             List of video search results
         """
         videos = []
         next_page_token = None
-        
+
         while len(videos) < max_results:
             batch_size = min(50, max_results - len(videos))
-            
+
             request_params = {
                 'part': 'snippet',
                 'q': query,
@@ -472,11 +474,13 @@ class YouTubeAPIClient:
                 'maxResults': batch_size,
                 'order': order
             }
-            
+
             if channel_id:
                 request_params['channelId'] = channel_id
             if published_after:
                 request_params['publishedAfter'] = published_after.isoformat() + 'Z'
+            if video_duration:
+                request_params['videoDuration'] = video_duration
             if next_page_token:
                 request_params['pageToken'] = next_page_token
             
@@ -511,7 +515,8 @@ class YouTubeAPIClient:
     async def get_related_videos(
         self,
         video_id: str,
-        max_results: int = 25
+        max_results: int = 25,
+        video_duration: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Get related/similar videos for a given video.
@@ -523,6 +528,7 @@ class YouTubeAPIClient:
         Args:
             video_id: YouTube video ID to find related videos for
             max_results: Maximum results to return (default 25)
+            video_duration: Duration filter - 'short' (<4min), 'medium' (4-20min), 'long' (>20min)
 
         Returns:
             List of related video information dictionaries
@@ -537,6 +543,8 @@ class YouTubeAPIClient:
                 'type': 'video',
                 'maxResults': min(50, max_results),
             }
+            if video_duration:
+                request_params['videoDuration'] = video_duration
 
             try:
                 response = await self._execute_api_call(
@@ -596,14 +604,20 @@ class YouTubeAPIClient:
             logger.debug(f"Searching for related videos with query: {search_query}")
 
             # Search for videos with similar title
+            search_params = {
+                'part': 'snippet',
+                'q': search_query,
+                'type': 'video',
+                'maxResults': min(50, max_results + 5),  # Get a few extra to filter
+                'order': 'relevance'
+            }
+            if video_duration:
+                search_params['videoDuration'] = video_duration
+
             response = await self._execute_api_call(
                 YouTubeAPIOperation.SEARCH_LIST,
                 self.youtube.search().list,
-                part='snippet',
-                q=search_query,
-                type='video',
-                maxResults=min(50, max_results + 5),  # Get a few extra to filter
-                order='relevance'
+                **search_params
             )
 
             for item in response.get('items', []):

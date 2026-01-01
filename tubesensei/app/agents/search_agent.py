@@ -71,11 +71,15 @@ class SearchAgent(BaseAgent):
 
             # Apply rate limiting
             async with self.context.youtube_rate_limiter.acquire():
+                # Get YouTube API duration filter (coarse filtering at source)
+                youtube_duration_filter = self._get_youtube_duration_filter()
+
                 # Search YouTube
                 search_results = await youtube.search_videos(
                     query=topic,
                     max_results=max_results,
-                    order="relevance"
+                    order="relevance",
+                    video_duration=youtube_duration_filter
                 )
                 self.increment_api_calls()
 
@@ -102,6 +106,16 @@ class SearchAgent(BaseAgent):
                 if await self.check_should_stop():
                     logger.info("SearchAgent: Stopping due to limit reached or cancellation")
                     break
+
+                # Apply precise duration filter
+                duration = video_data.get("duration_seconds")
+                if not self._passes_duration_filter(duration):
+                    logger.debug(
+                        f"Video {video_data.get('video_id')} filtered by duration: {duration}s "
+                        f"(min: {self.min_duration_seconds}s, max: {self.max_duration_seconds}s)"
+                    )
+                    self.increment_processed()
+                    continue
 
                 self.update_progress(
                     ((idx + 1) / total_items) * 100,

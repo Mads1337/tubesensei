@@ -81,6 +81,26 @@ class CampaignConfig(BaseModel):
         default=["search", "channel_expansion", "topic_filter", "similar_videos"],
         description="List of enabled discovery agents"
     )
+    min_duration_seconds: int = Field(
+        default=60,
+        ge=0,
+        le=86400,
+        description="Minimum video duration in seconds (default: 60 = 1 minute)"
+    )
+    max_duration_seconds: int = Field(
+        default=7200,
+        ge=0,
+        le=86400,
+        description="Maximum video duration in seconds (default: 7200 = 2 hours)"
+    )
+
+    @validator('max_duration_seconds')
+    def validate_duration_range(cls, v, values):
+        """Ensure max duration is greater than or equal to min duration."""
+        min_duration = values.get('min_duration_seconds')
+        if min_duration is not None and v < min_duration:
+            raise ValueError('max_duration_seconds must be >= min_duration_seconds')
+        return v
 
 
 # Campaign CRUD Schemas

@@ -165,6 +165,63 @@ class BaseAgent(ABC):
         """Get relevance filter threshold from campaign config."""
         return self.config.get("filter_threshold", 0.7)
 
+    @property
+    def min_duration_seconds(self) -> int:
+        """Get minimum video duration from campaign config."""
+        return self.config.get("min_duration_seconds", 60)
+
+    @property
+    def max_duration_seconds(self) -> int:
+        """Get maximum video duration from campaign config."""
+        return self.config.get("max_duration_seconds", 7200)
+
+    def _get_youtube_duration_filter(self) -> Optional[str]:
+        """
+        Determine the best YouTube API videoDuration filter based on config.
+
+        YouTube API only supports: 'short' (<4min), 'medium' (4-20min), 'long' (>20min)
+        Returns the most appropriate filter or None if no filtering is beneficial.
+        """
+        min_sec = self.min_duration_seconds
+        max_sec = self.max_duration_seconds
+
+        # If min >= 20 minutes (1200 seconds), use 'long'
+        if min_sec >= 1200:
+            return "long"
+
+        # If max <= 4 minutes (240 seconds), use 'short'
+        if max_sec <= 240:
+            return "short"
+
+        # If min >= 4 minutes and max <= 20 minutes, use 'medium'
+        if min_sec >= 240 and max_sec <= 1200:
+            return "medium"
+
+        # Otherwise, no coarse filter is beneficial - filter after fetch
+        return None
+
+    def _passes_duration_filter(self, duration_seconds: Optional[int]) -> bool:
+        """
+        Check if a video duration passes the min/max filter.
+
+        Args:
+            duration_seconds: Video duration in seconds (None means unknown)
+
+        Returns:
+            True if the video passes the filter, False otherwise
+        """
+        if duration_seconds is None:
+            # Unknown duration - allow it through
+            return True
+
+        if duration_seconds < self.min_duration_seconds:
+            return False
+
+        if duration_seconds > self.max_duration_seconds:
+            return False
+
+        return True
+
     async def execute(self, input_data: Dict[str, Any]) -> AgentResult:
         """
         Execute the agent with full lifecycle management.

@@ -96,6 +96,8 @@ class CoordinatorAgent(BaseAgent):
             # Restore state from checkpoint
             await self._restore_checkpoint()
 
+        # Send initial heartbeat
+        campaign.heartbeat()
         await self.db.flush()
 
         try:
@@ -207,8 +209,14 @@ class CoordinatorAgent(BaseAgent):
                 current_item=f"Iteration {self._iteration}"
             )
 
+            # Send heartbeat to indicate worker is still alive
+            self.context.campaign.heartbeat()
+
             # Save checkpoint after each iteration
             await self._save_checkpoint()
+
+            # Commit heartbeat and checkpoint to ensure persistence
+            await self.db.commit()
 
     async def _run_search(self, topic: str) -> None:
         """Run the search agent."""

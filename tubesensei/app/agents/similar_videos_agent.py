@@ -119,11 +119,13 @@ class SimilarVideosAgent(BaseAgent):
 
                     youtube_video_id = source_video.youtube_video_id
 
-                    # Get related videos
+                    # Get related videos with duration filter
+                    youtube_duration_filter = self._get_youtube_duration_filter()
                     async with self.context.youtube_rate_limiter.acquire():
                         related_videos = await youtube.get_related_videos(
                             video_id=youtube_video_id,
-                            max_results=max_per_video
+                            max_results=max_per_video,
+                            video_duration=youtube_duration_filter
                         )
                         self.increment_api_calls()
 
@@ -142,6 +144,15 @@ class SimilarVideosAgent(BaseAgent):
                         # Check campaign limits
                         if await self.check_should_stop():
                             break
+
+                        # Apply precise duration filter
+                        duration = video_data.get("duration_seconds")
+                        if not self._passes_duration_filter(duration):
+                            logger.debug(
+                                f"Video {video_data.get('video_id')} filtered by duration: {duration}s "
+                                f"(min: {self.min_duration_seconds}s, max: {self.max_duration_seconds}s)"
+                            )
+                            continue
 
                         vid_id, ch_id, is_new = await self._process_video(
                             video_data, source_video.id, depth + 1

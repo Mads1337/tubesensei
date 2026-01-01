@@ -183,6 +183,13 @@ def run_topic_campaign_task(
     start_time = datetime.now(timezone.utc)
     TaskMonitor.record_task_start(self.name)
 
+    # Diagnostic logging for task lifecycle
+    logger.info(
+        f"[TASK START] Campaign task starting - "
+        f"campaign_id={campaign_id}, task_id={self.request.id}, "
+        f"resume={resume}, retry={self.request.retries}/{self.max_retries}"
+    )
+
     try:
         campaign_uuid = UUID(campaign_id)
 
@@ -203,7 +210,11 @@ def run_topic_campaign_task(
                     elif resume and campaign.status != CampaignStatus.PAUSED:
                         raise ValueError(f"Campaign cannot be resumed from {campaign.status.value} status")
 
-                    logger.info(f"Running topic campaign: {campaign.name} ({campaign_id})")
+                    logger.info(
+                        f"[TASK RUNNING] Executing coordinator - "
+                        f"campaign_id={campaign_id}, name={campaign.name}, "
+                        f"topic={campaign.topic[:50]}..."
+                    )
 
                     # Publish campaign start event
                     publish_campaign_progress(campaign_id, {
@@ -271,8 +282,9 @@ def run_topic_campaign_task(
         result["total_duration"] = duration
 
         logger.info(
-            f"Topic campaign {campaign_id} completed: "
-            f"{result['videos_relevant']} relevant videos in {duration:.1f}s"
+            f"[TASK SUCCESS] Campaign task completed - "
+            f"campaign_id={campaign_id}, task_id={self.request.id}, "
+            f"videos_relevant={result['videos_relevant']}, duration={duration:.1f}s"
         )
 
         # Publish campaign completion event
@@ -293,7 +305,13 @@ def run_topic_campaign_task(
         return result
 
     except Exception as e:
-        logger.exception(f"Topic campaign {campaign_id} failed: {e}")
+        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+        logger.exception(
+            f"[TASK ERROR] Campaign task failed - "
+            f"campaign_id={campaign_id}, task_id={self.request.id}, "
+            f"elapsed={elapsed:.1f}s, retry={self.request.retries}/{self.max_retries}, "
+            f"error={str(e)[:200]}"
+        )
         raise self.retry(exc=e)
 
 
