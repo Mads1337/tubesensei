@@ -32,33 +32,26 @@ from app.ai.retry_strategy import RetryStrategy
 
 logger = logging.getLogger(__name__)
 
-# Cost tracking per 1M tokens (2025 pricing from llm-price.com)
+# Cost tracking per 1M tokens (current pricing)
 MODEL_COSTS = {
-    # OpenAI GPT-5 Models Only
-    "gpt-5": {"input": 1.25, "output": 10.0},  # Premium flagship model
-    "gpt-5-mini": {"input": 0.25, "output": 2.0},  # Mid-tier GPT-5
-    "gpt-5-nano": {"input": 0.05, "output": 0.4},  # Fast GPT-5
-    
-    # Anthropic Models (2025)
-    "claude-opus-4.1": {"input": 15.0, "output": 75.0},  # Most capable
-    "claude-sonnet-4": {"input": 3.0, "output": 15.0},  # High performance
-    "claude-3.7-sonnet": {"input": 3.0, "output": 15.0},  # Hybrid reasoning
-    "claude-3.5-sonnet-20241022": {"input": 3.0, "output": 15.0},  # Latest 3.5
-    "claude-3.5-haiku-20241022": {"input": 0.8, "output": 4.0},  # Fast and cheap
-    
-    # Google Models (2025)
-    "gemini-2.5-pro": {"input": 1.25, "output": 10.0},  # Gemini 2.5 Pro
-    "gemini-2.5-flash": {"input": 0.3, "output": 2.5},  # Best price/performance
-    "gemini-2.5-flash-lite": {"input": 0.1, "output": 0.4},  # Lowest cost
-    "gemini-2.0-flash": {"input": 0.1, "output": 0.4},  # Production ready
-    "gemini-2.0-flash-lite": {"input": 0.075, "output": 0.3},  # Ultra fast
-    
-    # DeepSeek Models
-    "deepseek-chat": {"input": 0.18, "output": 0.72},  # DeepSeek R1
-    "deepseek-v3": {"input": 0.18, "output": 0.72},  # DeepSeek V3
-    
-    # Other Models
-    "qwen-2.5-coder-32b": {"input": 0.05, "output": 0.2},  # Qwen Coder
+    # DeepSeek Models (primary - very cost effective)
+    "deepseek-chat": {"input": 0.14, "output": 0.28},
+    "deepseek-v3": {"input": 0.14, "output": 0.28},
+
+    # OpenAI Models (fallback)
+    "gpt-4o": {"input": 2.50, "output": 10.0},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4-turbo": {"input": 10.0, "output": 30.0},
+
+    # Anthropic Models (fallback)
+    "claude-3-5-sonnet-20241022": {"input": 3.0, "output": 15.0},
+    "claude-3-5-haiku-20241022": {"input": 0.80, "output": 4.0},
+    "claude-3-opus-20240229": {"input": 15.0, "output": 75.0},
+
+    # Google Gemini Models (fallback)
+    "gemini-1.5-pro": {"input": 1.25, "output": 5.0},
+    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
+    "gemini-2.0-flash-exp": {"input": 0.10, "output": 0.40},
 }
 
 
@@ -86,28 +79,25 @@ class LLMManager:
     Unified LLM manager with multi-provider support, fallback, and cost tracking.
     """
     
-    # Model configuration ordered by cost efficiency (cheapest first) - 2025
+    # Model configuration - DeepSeek primary, others as fallback
     MODEL_CONFIG: Dict[ModelType, List[str]] = {
         ModelType.FAST: [
-            "gpt-5-nano",
-            "gemini-2.0-flash-lite",     # $0.125 avg - Ultra fast & cheapest
-            "deepseek-chat",             # $0.21 avg - Budget option
-            "gemini-2.5-flash-lite",     # $0.25 avg - Low cost Gemini
-            "claude-3.5-haiku-20241022", # $2.4 avg - Latest Haiku
+            "deepseek-chat",             # Primary - very cost effective
+            "gemini-1.5-flash",          # Fast fallback
+            "gpt-4o-mini",               # OpenAI fallback
+            "claude-3-5-haiku-20241022", # Anthropic fallback
         ],
         ModelType.BALANCED: [
-            "deepseek-chat",
-            "gpt-5-mini",
-            "gemini-2.5-flash",          # $0.25 avg - Best price/performance
-            "gemini-2.0-flash",          # $0.25 avg - Production ready
-            "claude-sonnet-4",           # $9.0 avg - High performance Claude 4
+            "deepseek-chat",             # Primary
+            "gemini-2.0-flash-exp",      # Google fallback
+            "gpt-4o-mini",               # OpenAI fallback
+            "claude-3-5-sonnet-20241022", # Anthropic fallback
         ],
         ModelType.QUALITY: [
-            "gpt-5-mini",
-            "deepseek-chat",
-            "gemini-2.5-pro",            # $5.6 avg - Gemini Pro
-            "claude-sonnet-4",           # $9.0 avg - High performance reasoning
-            "gpt-5",                     # $5.6 avg - OpenAI flagship
+            "deepseek-chat",             # Primary - still very capable
+            "gpt-4o",                    # OpenAI quality fallback
+            "claude-3-5-sonnet-20241022", # Anthropic quality fallback
+            "gemini-1.5-pro",            # Google quality fallback
         ]
     }
     
@@ -134,46 +124,45 @@ class LLMManager:
             # Build model list for router
             model_list = []
             
-            # OpenAI GPT-5 models only (2025)
+            # OpenAI models
             if settings.OPENAI_API_KEY:
                 openai_models = [
-                    "gpt-5", "gpt-5-mini", "gpt-5-nano"
+                    "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"
                 ]
                 for model in openai_models:
                     model_list.append({
                         "model_name": model,
                         "litellm_params": {
-                            "model": model,
+                            "model": f"openai/{model}",
                             "api_key": settings.OPENAI_API_KEY
                         }
                     })
-            
-            # Anthropic models (2025)
+
+            # Anthropic models
             if settings.ANTHROPIC_API_KEY:
                 anthropic_models = [
-                    "claude-opus-4.1", "claude-sonnet-4", "claude-3.7-sonnet",
-                    "claude-3.5-sonnet-20241022", "claude-3.5-haiku-20241022"
+                    "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022",
+                    "claude-3-opus-20240229"
                 ]
                 for model in anthropic_models:
                     model_list.append({
                         "model_name": model,
                         "litellm_params": {
-                            "model": model,
+                            "model": f"anthropic/{model}",
                             "api_key": settings.ANTHROPIC_API_KEY
                         }
                     })
-            
-            # Google models (2025)
+
+            # Google Gemini models
             if settings.GOOGLE_API_KEY:
                 google_models = [
-                    "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", 
-                    "gemini-2.0-flash", "gemini-2.0-flash-lite"
+                    "gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash-exp"
                 ]
                 for model in google_models:
                     model_list.append({
                         "model_name": model,
                         "litellm_params": {
-                            "model": model,
+                            "model": f"gemini/{model}",
                             "api_key": settings.GOOGLE_API_KEY
                         }
                     })
@@ -204,30 +193,26 @@ class LLMManager:
                 logger.warning("No LLM API keys configured")
                 return
             
-            # Initialize router with cost-optimized fallbacks (2025)
+            # Initialize router with DeepSeek-primary fallbacks
             self.router = Router(
                 model_list=model_list,
                 fallbacks=[
-                    # Fast tier fallbacks (cheapest options first)
-                    {"gemini-2.0-flash-lite": ["deepseek-chat", "gemini-2.5-flash-lite"]},
-                    {"deepseek-chat": ["gemini-2.0-flash-lite", "gemini-2.5-flash-lite"]},
-                    {"gemini-2.5-flash-lite": ["gemini-2.0-flash-lite", "deepseek-chat"]},
-                    {"claude-3.5-haiku-20241022": ["gemini-2.0-flash-lite", "gpt-5-nano"]},
-                    {"gpt-5-nano": ["claude-3.5-haiku-20241022", "gemini-2.5-flash-lite"]},
-                    
-                    # Balanced tier fallbacks (cost-efficient alternatives)
-                    {"gemini-2.5-flash": ["gemini-2.0-flash", "deepseek-chat"]},
-                    {"gemini-2.0-flash": ["gemini-2.5-flash", "deepseek-chat"]},
-                    {"claude-3.5-sonnet-20241022": ["deepseek-chat", "claude-sonnet-4"]},
-                    {"claude-sonnet-4": ["claude-3.5-sonnet-20241022", "deepseek-chat"]},
-                    {"gpt-5-mini": ["claude-sonnet-4", "deepseek-chat"]},
-                    
-                    # Quality tier fallbacks (cost-conscious quality)
-                    {"claude-3.5-sonnet-20241022": ["deepseek-chat", "claude-sonnet-4"]},
-                    {"claude-sonnet-4": ["claude-3.5-sonnet-20241022", "claude-3.7-sonnet"]},
-                    {"claude-3.7-sonnet": ["claude-sonnet-4", "deepseek-chat"]},
-                    {"gpt-5": ["claude-3.7-sonnet", "claude-sonnet-4"]},
-                    {"claude-opus-4.1": ["gpt-5", "claude-3.7-sonnet"]},
+                    # DeepSeek primary fallbacks
+                    {"deepseek-chat": ["gpt-4o-mini", "gemini-1.5-flash"]},
+                    {"deepseek-v3": ["deepseek-chat", "gpt-4o-mini"]},
+
+                    # OpenAI fallbacks
+                    {"gpt-4o": ["deepseek-chat", "claude-3-5-sonnet-20241022"]},
+                    {"gpt-4o-mini": ["deepseek-chat", "gemini-1.5-flash"]},
+
+                    # Anthropic fallbacks
+                    {"claude-3-5-sonnet-20241022": ["deepseek-chat", "gpt-4o"]},
+                    {"claude-3-5-haiku-20241022": ["deepseek-chat", "gpt-4o-mini"]},
+
+                    # Google fallbacks
+                    {"gemini-1.5-pro": ["deepseek-chat", "gpt-4o"]},
+                    {"gemini-1.5-flash": ["deepseek-chat", "gpt-4o-mini"]},
+                    {"gemini-2.0-flash-exp": ["deepseek-chat", "gemini-1.5-flash"]},
                 ]
             )
             
@@ -455,18 +440,17 @@ class LLMManager:
             
             try:
                 logger.debug(f"Attempting completion with model: {model}")
-                
+
                 # Create retry context for this model/provider
                 retry_context = self.retry_strategy.create_retry_context(provider=provider, model=model)
-                
-                # Define the operation to retry
+
+                # Define the operation to retry using router's acompletion
                 async def completion_operation():
-                    return await asyncio.to_thread(
-                        completion,
+                    return await self.router.acompletion(
                         model=model,
                         **completion_params
                     )
-                
+
                 # Execute with retry strategy
                 response = await self.retry_strategy.execute_with_retry(
                     completion_operation,
@@ -517,7 +501,60 @@ class LLMManager:
             f"All models failed for type {model_type}. "
             f"Last error: {last_exception}"
         )
-    
+
+    async def generate(
+        self,
+        prompt: str,
+        model_type: ModelType = ModelType.BALANCED,
+        temperature: float = None,
+        max_tokens: int = None,
+        system_prompt: str = None,
+        use_cache: bool = True,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Simple text generation interface that wraps complete().
+
+        Args:
+            prompt: The prompt text to send
+            model_type: Type of model to use (fast/balanced/quality)
+            temperature: Generation temperature
+            max_tokens: Maximum tokens to generate
+            system_prompt: Optional system prompt
+            use_cache: Whether to use Redis caching
+            **kwargs: Additional LiteLLM parameters
+
+        Returns:
+            Dict with 'content', 'usage', and 'cost' keys
+        """
+        # Build messages list
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        # Call complete()
+        response = await self.complete(
+            messages=messages,
+            model_type=model_type,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            use_cache=use_cache,
+            **kwargs
+        )
+
+        # Return dict format expected by agents
+        return {
+            "content": response.content,
+            "usage": {
+                "total_tokens": response.tokens_used,
+            },
+            "cost": response.cost,
+            "model": response.model,
+            "provider": response.provider,
+            "cached": response.cached,
+        }
+
     def _calculate_cost(self, model: str, usage: Any) -> float:
         """Calculate cost for the completion."""
         if not usage or not settings.LLM_COST_TRACKING_ENABLED:
@@ -548,6 +585,8 @@ class LLMManager:
             return "google"
         elif model.startswith("deepseek"):
             return "deepseek"
+        elif model.startswith("qwen"):
+            return "qwen"
         else:
             return "unknown"
     

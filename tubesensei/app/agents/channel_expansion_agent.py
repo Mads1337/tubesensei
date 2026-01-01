@@ -242,13 +242,22 @@ class ChannelExpansionAgent(BaseAgent):
         video = result.scalar_one_or_none()
 
         if not video:
+            # Parse published_at datetime string
+            published_at_str = video_data.get("published_at")
+            published_at = None
+            if published_at_str:
+                try:
+                    published_at = datetime.fromisoformat(published_at_str.replace('Z', '+00:00'))
+                except (ValueError, AttributeError):
+                    pass
+
             # Create new video
             video = Video(
                 youtube_video_id=youtube_video_id,
                 channel_id=channel_id,
                 title=video_data.get("title", "Untitled"),
                 description=video_data.get("description", ""),
-                published_at=video_data.get("published_at"),
+                published_at=published_at,
                 duration_seconds=video_data.get("duration_seconds", 0),
                 view_count=video_data.get("view_count", 0),
                 like_count=video_data.get("like_count", 0),

@@ -258,6 +258,10 @@ class Settings(BaseSettings):
         default="",
         description="DeepSeek API key for DeepSeek models (optional)"
     )
+    QWEN_API_KEY: str = Field(
+        default="",
+        description="Qwen/Alibaba Cloud API key for Qwen models (optional)"
+    )
     LLM_CACHE_TTL: int = Field(
         default=86400,  # 24 hours
         description="Cache TTL for LLM responses in seconds"
@@ -298,7 +302,7 @@ class Settings(BaseSettings):
     )
 
     class Config:
-        env_file = ".env"
+        env_file = "../.env"
         env_file_encoding = "utf-8"
         case_sensitive = True
 
