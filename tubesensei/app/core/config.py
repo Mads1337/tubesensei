@@ -217,7 +217,7 @@ class TopicDiscoverySettings(BaseSettings):
         description="Number of videos to filter in a single LLM call"
     )
     FILTER_MODEL: str = Field(
-        default="gpt-4o-mini",
+        default="deepseek-chat",
         description="LLM model to use for topic filtering"
     )
 

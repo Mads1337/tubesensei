@@ -32,26 +32,24 @@ from app.ai.retry_strategy import RetryStrategy
 
 logger = logging.getLogger(__name__)
 
-# Cost tracking per 1M tokens (current pricing)
+# Cost tracking per 1M tokens (current pricing - Dec 2025)
 MODEL_COSTS = {
     # DeepSeek Models (primary - very cost effective)
-    "deepseek-chat": {"input": 0.14, "output": 0.28},
-    "deepseek-v3": {"input": 0.14, "output": 0.28},
+    "deepseek-chat": {"input": 0.14, "output": 0.28},      # V3.2 non-thinking mode
+    "deepseek-reasoner": {"input": 0.55, "output": 2.19},  # V3.2 thinking/reasoning mode
 
     # OpenAI Models (fallback)
-    "gpt-4o": {"input": 2.50, "output": 10.0},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gpt-4-turbo": {"input": 10.0, "output": 30.0},
+    "gpt-4.1": {"input": 2.00, "output": 8.00},
+    "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
+    "o3-mini": {"input": 1.10, "output": 4.40},
 
     # Anthropic Models (fallback)
-    "claude-3-5-sonnet-20241022": {"input": 3.0, "output": 15.0},
-    "claude-3-5-haiku-20241022": {"input": 0.80, "output": 4.0},
-    "claude-3-opus-20240229": {"input": 15.0, "output": 75.0},
+    "claude-sonnet-4-5-20250929": {"input": 3.0, "output": 15.0},
+    "claude-haiku-4-5": {"input": 1.0, "output": 5.0},
 
     # Google Gemini Models (fallback)
-    "gemini-1.5-pro": {"input": 1.25, "output": 5.0},
-    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
-    "gemini-2.0-flash-exp": {"input": 0.10, "output": 0.40},
+    "gemini-2.5-pro": {"input": 1.25, "output": 5.0},
+    "gemini-2.5-flash": {"input": 0.075, "output": 0.30},
 }
 
 
@@ -79,25 +77,26 @@ class LLMManager:
     Unified LLM manager with multi-provider support, fallback, and cost tracking.
     """
     
-    # Model configuration - DeepSeek primary, others as fallback
+    # Model configuration - DeepSeek primary, others as fallback (Dec 2025)
+    # To use deepseek-reasoner for quality tasks, change the first entry in QUALITY tier
     MODEL_CONFIG: Dict[ModelType, List[str]] = {
         ModelType.FAST: [
-            "deepseek-chat",             # Primary - very cost effective
-            "gemini-1.5-flash",          # Fast fallback
-            "gpt-4o-mini",               # OpenAI fallback
-            "claude-3-5-haiku-20241022", # Anthropic fallback
+            "deepseek-chat",             # Primary - fast and cheap
+            "gemini-2.5-flash",          # Fast fallback
+            "gpt-4.1-mini",              # OpenAI fallback
+            "claude-haiku-4-5",          # Anthropic fallback
         ],
         ModelType.BALANCED: [
-            "deepseek-chat",             # Primary
-            "gemini-2.0-flash-exp",      # Google fallback
-            "gpt-4o-mini",               # OpenAI fallback
-            "claude-3-5-sonnet-20241022", # Anthropic fallback
+            "deepseek-chat",             # Primary - can switch to deepseek-reasoner if needed
+            "gemini-2.5-flash",          # Google fallback
+            "gpt-4.1-mini",              # OpenAI fallback
+            "claude-sonnet-4-5-20250929", # Anthropic fallback
         ],
         ModelType.QUALITY: [
-            "deepseek-chat",             # Primary - still very capable
-            "gpt-4o",                    # OpenAI quality fallback
-            "claude-3-5-sonnet-20241022", # Anthropic quality fallback
-            "gemini-1.5-pro",            # Google quality fallback
+            "deepseek-chat",             # Primary - switch to "deepseek-reasoner" for complex reasoning
+            "gpt-4.1",                   # OpenAI quality fallback
+            "claude-sonnet-4-5-20250929", # Anthropic quality fallback
+            "gemini-2.5-pro",            # Google quality fallback
         ]
     }
     
@@ -124,11 +123,21 @@ class LLMManager:
             # Build model list for router
             model_list = []
             
-            # OpenAI models
+            # DeepSeek models (primary - Dec 2025)
+            if settings.DEEPSEEK_API_KEY:
+                deepseek_models = ["deepseek-chat", "deepseek-reasoner"]
+                for model in deepseek_models:
+                    model_list.append({
+                        "model_name": model,
+                        "litellm_params": {
+                            "model": f"deepseek/{model}",
+                            "api_key": settings.DEEPSEEK_API_KEY
+                        }
+                    })
+
+            # OpenAI models (fallback)
             if settings.OPENAI_API_KEY:
-                openai_models = [
-                    "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"
-                ]
+                openai_models = ["gpt-4.1", "gpt-4.1-mini", "o3-mini"]
                 for model in openai_models:
                     model_list.append({
                         "model_name": model,
@@ -138,12 +147,9 @@ class LLMManager:
                         }
                     })
 
-            # Anthropic models
+            # Anthropic models (fallback)
             if settings.ANTHROPIC_API_KEY:
-                anthropic_models = [
-                    "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022",
-                    "claude-3-opus-20240229"
-                ]
+                anthropic_models = ["claude-sonnet-4-5-20250929", "claude-haiku-4-5"]
                 for model in anthropic_models:
                     model_list.append({
                         "model_name": model,
@@ -153,11 +159,9 @@ class LLMManager:
                         }
                     })
 
-            # Google Gemini models
+            # Google Gemini models (fallback)
             if settings.GOOGLE_API_KEY:
-                google_models = [
-                    "gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash-exp"
-                ]
+                google_models = ["gemini-2.5-pro", "gemini-2.5-flash"]
                 for model in google_models:
                     model_list.append({
                         "model_name": model,
@@ -167,52 +171,30 @@ class LLMManager:
                         }
                     })
             
-            # DeepSeek models (optional)
-            if settings.DEEPSEEK_API_KEY:
-                deepseek_models = ["deepseek-chat", "deepseek-v3"]
-                for model in deepseek_models:
-                    model_list.append({
-                        "model_name": model,
-                        "litellm_params": {
-                            "model": f"deepseek/{model}",
-                            "api_key": settings.DEEPSEEK_API_KEY
-                        }
-                    })
-            
-            # Qwen models (optional)
-            if settings.QWEN_API_KEY:
-                model_list.append({
-                    "model_name": "qwen-2.5-coder-32b",
-                    "litellm_params": {
-                        "model": "qwen/qwen-2.5-coder-32b",
-                        "api_key": settings.QWEN_API_KEY
-                    }
-                })
-            
             if not model_list:
                 logger.warning("No LLM API keys configured")
                 return
             
-            # Initialize router with DeepSeek-primary fallbacks
+            # Initialize router with DeepSeek-primary fallbacks (Dec 2025)
             self.router = Router(
                 model_list=model_list,
                 fallbacks=[
                     # DeepSeek primary fallbacks
-                    {"deepseek-chat": ["gpt-4o-mini", "gemini-1.5-flash"]},
-                    {"deepseek-v3": ["deepseek-chat", "gpt-4o-mini"]},
+                    {"deepseek-chat": ["gpt-4.1-mini", "gemini-2.5-flash"]},
+                    {"deepseek-reasoner": ["deepseek-chat", "gpt-4.1"]},
 
                     # OpenAI fallbacks
-                    {"gpt-4o": ["deepseek-chat", "claude-3-5-sonnet-20241022"]},
-                    {"gpt-4o-mini": ["deepseek-chat", "gemini-1.5-flash"]},
+                    {"gpt-4.1": ["deepseek-chat", "claude-sonnet-4-5-20250929"]},
+                    {"gpt-4.1-mini": ["deepseek-chat", "gemini-2.5-flash"]},
+                    {"o3-mini": ["deepseek-reasoner", "gpt-4.1"]},
 
                     # Anthropic fallbacks
-                    {"claude-3-5-sonnet-20241022": ["deepseek-chat", "gpt-4o"]},
-                    {"claude-3-5-haiku-20241022": ["deepseek-chat", "gpt-4o-mini"]},
+                    {"claude-sonnet-4-5-20250929": ["deepseek-chat", "gpt-4.1"]},
+                    {"claude-haiku-4-5": ["deepseek-chat", "gpt-4.1-mini"]},
 
                     # Google fallbacks
-                    {"gemini-1.5-pro": ["deepseek-chat", "gpt-4o"]},
-                    {"gemini-1.5-flash": ["deepseek-chat", "gpt-4o-mini"]},
-                    {"gemini-2.0-flash-exp": ["deepseek-chat", "gemini-1.5-flash"]},
+                    {"gemini-2.5-pro": ["deepseek-chat", "gpt-4.1"]},
+                    {"gemini-2.5-flash": ["deepseek-chat", "gpt-4.1-mini"]},
                 ]
             )
             
@@ -577,7 +559,7 @@ class LLMManager:
     
     def _get_provider(self, model: str) -> str:
         """Extract provider name from model."""
-        if model.startswith("gpt-"):
+        if model.startswith("gpt-") or model.startswith("o3") or model.startswith("o4"):
             return "openai"
         elif model.startswith("claude-"):
             return "anthropic"
