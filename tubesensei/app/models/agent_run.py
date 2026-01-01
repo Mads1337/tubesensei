@@ -21,6 +21,7 @@ class AgentType(enum.Enum):
     SEARCH = "search"                     # YouTube search for initial videos
     CHANNEL_EXPANSION = "channel_expansion"  # Gets all videos from a channel
     TOPIC_FILTER = "topic_filter"         # AI-based relevance filtering
+    TRANSCRIPTION = "transcription"       # Bulk transcription of discovered videos
     SIMILAR_VIDEOS = "similar_videos"     # Related videos discovery
 
 

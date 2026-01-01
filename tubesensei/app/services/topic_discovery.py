@@ -21,6 +21,7 @@ from app.models.video import Video
 from app.models.channel import Channel
 from app.agents.base import AgentContext, AgentEvent
 from app.agents.coordinator import CoordinatorAgent
+from app.agents.transcription_agent import TranscriptionAgent
 from app.utils.rate_limiter import RateLimiter
 from app.integrations.youtube_api import YouTubeAPIClient
 from app.ai.llm_manager import LLMManager
@@ -267,6 +268,60 @@ class TopicDiscoveryService:
 
         return campaign
 
+    async def run_transcription(
+        self,
+        campaign_id: UUID,
+        event_callback: Optional[callable] = None,
+    ) -> TopicCampaign:
+        """
+        Run the transcription agent for a campaign synchronously.
+        """
+        campaign = await self.get_campaign(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        # Set stage to transcription in metadata so we know what we are doing
+        if not campaign.campaign_metadata:
+            campaign.campaign_metadata = {}
+        campaign.campaign_metadata["stage"] = "transcription"
+        
+        # Determine if we are starting or resuming
+        # Taking over the status to RUNNING
+        if campaign.status != CampaignStatus.RUNNING:
+            campaign.status = CampaignStatus.RUNNING
+            await self.db.commit()
+
+        context = AgentContext(
+            campaign_id=campaign_id,
+            campaign=campaign,
+            db=self.db,
+            config=campaign.config or {},
+            # These rate limiters might not be heavily used by transcription but needed for context init
+            youtube_rate_limiter=RateLimiter(requests_per_minute=120),
+            llm_rate_limiter=RateLimiter(requests_per_minute=60),
+            event_callback=event_callback,
+        )
+
+        # Initialize agent
+        agent = TranscriptionAgent(context)
+
+        logger.info(f"Starting transcription for campaign {campaign_id}")
+        
+        result = await agent.execute({
+            "batch_size": 5
+        })
+
+        # After finish, what status?
+        # If successfully finished all transcriptions, we can stay COMPLETED
+        # or go back to whatever state.
+        # Typically we just mark campaign COMPLETED if everything is done.
+        
+        if result.success:
+            campaign.status = CampaignStatus.COMPLETED
+            await self.db.commit()
+
+        return campaign
+
     async def pause_campaign(self, campaign_id: UUID) -> TopicCampaign:
         """Pause a running campaign."""
         campaign = await self.get_campaign(campaign_id)
@@ -301,12 +356,23 @@ class TopicDiscoveryService:
 
     async def cancel_campaign(self, campaign_id: UUID) -> TopicCampaign:
         """Cancel a running or paused campaign."""
+        from app.celery_app import celery_app
+
         campaign = await self.get_campaign(campaign_id)
         if not campaign:
             raise ValueError(f"Campaign {campaign_id} not found")
 
         if not campaign.can_cancel:
             raise ValueError(f"Campaign cannot be cancelled from {campaign.status.value} status")
+
+        # Terminate the Celery task if running
+        if campaign.celery_task_id:
+            try:
+                celery_app.control.revoke(campaign.celery_task_id, terminate=True)
+                logger.info(f"Revoked Celery task {campaign.celery_task_id} for campaign {campaign_id}")
+            except Exception as e:
+                logger.warning(f"Failed to revoke Celery task: {e}")
+            campaign.celery_task_id = None
 
         campaign.cancel()
         await self.db.commit()
@@ -383,6 +449,8 @@ class TopicDiscoveryService:
         Returns:
             Updated campaign
         """
+        from app.celery_app import celery_app
+
         campaign = await self.get_campaign(campaign_id)
         if not campaign:
             raise ValueError(f"Campaign {campaign_id} not found")
@@ -394,10 +462,14 @@ class TopicDiscoveryService:
         if not campaign.is_stale:
             raise ValueError("Campaign is not stale - it has a recent heartbeat")
 
-        # Check if task is still alive (shouldn't be if stale)
-        task_alive = await self.check_campaign_task_alive(campaign_id)
-        if task_alive:
-            raise ValueError("Campaign task is still active - cannot recover")
+        # Terminate any zombie Celery task
+        if campaign.celery_task_id:
+            try:
+                celery_app.control.revoke(campaign.celery_task_id, terminate=True)
+                logger.info(f"Revoked zombie Celery task {campaign.celery_task_id}")
+            except Exception as e:
+                logger.warning(f"Failed to revoke Celery task: {e}")
+            campaign.celery_task_id = None
 
         if action == "fail":
             campaign.fail("Campaign stalled - worker task died unexpectedly")
@@ -407,7 +479,6 @@ class TopicDiscoveryService:
             campaign.status = CampaignStatus.DRAFT
             campaign.error_message = None
             campaign.error_count = 0
-            campaign.celery_task_id = None
             campaign.last_heartbeat_at = None
             # Keep progress data intact for resume
             logger.info(f"Reset stale campaign for restart: {campaign_id}")
@@ -417,6 +488,47 @@ class TopicDiscoveryService:
         await self.db.commit()
         await self.db.refresh(campaign)
 
+        return campaign
+
+    async def force_stop_campaign(self, campaign_id: UUID) -> TopicCampaign:
+        """
+        Force stop a campaign regardless of current state.
+
+        This immediately terminates any running Celery task and marks the campaign
+        as failed. Use this for stuck campaigns that can't be cancelled normally.
+
+        Args:
+            campaign_id: Campaign to force stop
+
+        Returns:
+            Updated campaign marked as failed
+        """
+        from app.celery_app import celery_app
+
+        campaign = await self.get_campaign(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        # Terminate the Celery task if present
+        if campaign.celery_task_id:
+            try:
+                celery_app.control.revoke(campaign.celery_task_id, terminate=True)
+                logger.info(f"Force-terminated Celery task {campaign.celery_task_id}")
+            except Exception as e:
+                logger.warning(f"Failed to revoke Celery task: {e}")
+            campaign.celery_task_id = None
+
+        # Mark as failed regardless of current state
+        campaign.status = CampaignStatus.FAILED
+        campaign.error_message = "Manually force-stopped by user"
+        campaign.completed_at = datetime.now(timezone.utc)
+        if campaign.started_at:
+            campaign.execution_time_seconds = (campaign.completed_at - campaign.started_at).total_seconds()
+
+        await self.db.commit()
+        await self.db.refresh(campaign)
+
+        logger.info(f"Force-stopped campaign: {campaign_id}")
         return campaign
 
     async def retry_campaign(self, campaign_id: UUID) -> TopicCampaign:
@@ -449,6 +561,45 @@ class TopicDiscoveryService:
         await self.db.refresh(campaign)
 
         logger.info(f"Reset failed campaign for retry: {campaign_id}")
+        return campaign
+
+    async def retry_transcription(self, campaign_id: UUID) -> TopicCampaign:
+        """
+        Retry transcription for a failed campaign.
+
+        This resets the error state while keeping the transcription stage,
+        allowing the transcription process to be restarted.
+
+        Args:
+            campaign_id: Campaign to retry transcription for
+
+        Returns:
+            Updated campaign ready for transcription restart
+        """
+        campaign = await self.get_campaign(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        if campaign.status != CampaignStatus.FAILED:
+            raise ValueError(f"Can only retry FAILED campaigns, current status: {campaign.status.value}")
+
+        # Verify it's in transcription stage
+        if not campaign.campaign_metadata or campaign.campaign_metadata.get('stage') != 'transcription':
+            raise ValueError("Campaign is not in transcription stage. Use regular retry for discovery campaigns.")
+
+        # Reset error state but keep transcription stage
+        campaign.status = CampaignStatus.RUNNING
+        campaign.error_message = None
+        campaign.error_count = 0
+        campaign.completed_at = None
+        campaign.execution_time_seconds = None
+        # Send initial heartbeat
+        campaign.heartbeat()
+
+        await self.db.commit()
+        await self.db.refresh(campaign)
+
+        logger.info(f"Reset failed transcription campaign for retry: {campaign_id}")
         return campaign
 
     # Progress and results
@@ -611,7 +762,7 @@ class TopicDiscoveryService:
         campaign_id: UUID,
         agent_type: Optional[AgentType] = None,
         limit: int = 50,
-    ) -> List[Dict[str, Any]]:
+    ) -> List[AgentRun]:
         """Get agent execution history for a campaign."""
         query = (
             select(AgentRun)
@@ -627,7 +778,7 @@ class TopicDiscoveryService:
         result = await self.db.execute(query)
         runs = result.scalars().all()
 
-        return [run.get_summary() for run in runs]
+        return runs
 
     # Export
 

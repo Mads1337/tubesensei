@@ -27,6 +27,7 @@ from app.agents.search_agent import SearchAgent
 from app.agents.channel_expansion_agent import ChannelExpansionAgent
 from app.agents.topic_filter_agent import TopicFilterAgent
 from app.agents.similar_videos_agent import SimilarVideosAgent
+from app.agents.transcription_agent import TranscriptionAgent
 from app.utils.rate_limiter import RateLimiter
 from app.integrations.youtube_api import YouTubeAPIClient
 from app.ai.llm_manager import LLMManager
@@ -312,6 +313,74 @@ def run_topic_campaign_task(
             f"elapsed={elapsed:.1f}s, retry={self.request.retries}/{self.max_retries}, "
             f"error={str(e)[:200]}"
         )
+        raise self.retry(exc=e)
+
+
+@celery_app.task(
+    base=TopicDiscoveryTask,
+    bind=True,
+    max_retries=3,
+    default_retry_delay=120,
+    name="app.workers.topic_discovery_tasks.run_transcription_campaign"
+)
+def run_transcription_campaign_task(
+    self,
+    campaign_id: str,
+) -> Dict[str, Any]:
+    """
+    Run the transcription stage for a campaign.
+    """
+    start_time = datetime.now(timezone.utc)
+    TaskMonitor.record_task_start(self.name)
+
+    try:
+        campaign_uuid = UUID(campaign_id)
+
+        async def _run():
+            WorkerSession, worker_engine = create_worker_session_factory()
+            try:
+                async with WorkerSession() as session:
+                    service = TopicDiscoveryService(session)
+                    
+                    # Create a progress handler that publishes to the same channel
+                    # so the UI gets updates
+                    handler = create_progress_handler(self.request.id, campaign_id)
+                    
+                    await service.run_transcription(
+                        campaign_id=campaign_uuid,
+                        event_callback=handler
+                    )
+                    
+                    return {
+                        "success": True, 
+                        "campaign_id": campaign_id
+                    }
+            finally:
+                await worker_engine.dispose()
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(_run())
+        finally:
+            loop.close()
+
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+        
+        # Publish completion
+        publish_campaign_progress(campaign_id, {
+            "type": "campaign_completed",
+            "message": "Transcription completed",
+            "status": "completed",
+            "stats": {"duration": duration}
+        })
+        
+        return result
+
+    except Exception as e:
+        logger.exception(f"Transcription campaign task failed: {e}")
+        # Mark campaign failed? Or just retry?
+        # If we raise here, on_failure will mark it failed.
         raise self.retry(exc=e)
 
 

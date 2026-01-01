@@ -32,6 +32,7 @@ from app.schemas.topic_campaign import (
 )
 from app.workers.topic_discovery_tasks import (
     run_topic_campaign_task,
+    run_transcription_campaign_task,
     process_campaign_transcripts_task,
     extract_campaign_ideas_task,
 )
@@ -253,6 +254,31 @@ async def cancel_campaign(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/{campaign_id}/force-stop", response_model=CampaignActionResponse)
+async def force_stop_campaign(
+    campaign_id: UUID,
+    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
+    service: TopicDiscoveryService = Depends(get_topic_discovery_service),
+):
+    """
+    Force stop a campaign regardless of current state.
+
+    This immediately terminates any running Celery task and marks the campaign
+    as FAILED. Use this for stuck campaigns that can't be cancelled normally.
+    """
+    try:
+        campaign = await service.force_stop_campaign(campaign_id)
+        return CampaignActionResponse(
+            campaign_id=campaign_id,
+            action="force_stop",
+            success=True,
+            status=CampaignStatus(campaign.status.value),
+            message="Campaign force-stopped successfully",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/{campaign_id}/retry", response_model=CampaignActionResponse)
 async def retry_campaign(
     campaign_id: UUID,
@@ -402,6 +428,130 @@ async def export_campaign_results(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/{campaign_id}/transcription/start", response_model=CampaignActionResponse)
+async def start_transcription(
+    campaign_id: UUID,
+    background_tasks: BackgroundTasks,
+    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
+    service: TopicDiscoveryService = Depends(get_topic_discovery_service),
+):
+    """
+    Start transcript extraction for a campaign.
+    
+    This runs the new TranscriptionAgent to extract transcripts for all relevant videos.
+    """
+    try:
+        # We assume run_transcription acts synchronously in service to setup state,
+        # but we want to run the heavy lifting in background.
+        
+        # Check if can run
+        campaign = await service.get_campaign(campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+            
+        # Call service to update status/metadata immediately
+        await service.run_transcription(campaign_id) # Using the synchronous method to update DB state
+        
+        # Queue the Celery task
+        task = run_transcription_campaign_task.delay(str(campaign_id))
+
+        return CampaignActionResponse(
+            campaign_id=campaign_id,
+            action="start_transcription",
+            success=True,
+            status=CampaignStatus(campaign.status.value),
+            message="Transcription started",
+            task_id=task.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{campaign_id}/transcription/pause", response_model=CampaignActionResponse)
+async def pause_transcription(
+    campaign_id: UUID,
+    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
+    service: TopicDiscoveryService = Depends(get_topic_discovery_service),
+):
+    """Pause transcription extraction."""
+    try:
+        campaign = await service.pause_campaign(campaign_id)
+        return CampaignActionResponse(
+            campaign_id=campaign_id,
+            action="pause_transcription",
+            success=True,
+            status=CampaignStatus(campaign.status.value),
+            message="Transcription paused",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{campaign_id}/transcription/resume", response_model=CampaignActionResponse)
+async def resume_transcription(
+    campaign_id: UUID,
+    background_tasks: BackgroundTasks,
+    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
+    service: TopicDiscoveryService = Depends(get_topic_discovery_service),
+):
+    """Resume transcription extraction."""
+    try:
+        # Check if it was in transcription stage
+        campaign = await service.get_campaign(campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+            
+        # We can reuse resume_campaign from service logic if we are careful,
+        # or just set status to RUNNING and queue task.
+        campaign = await service.resume_campaign(campaign_id)
+        
+        # Queue the transcription task AGAIN (it will pick up where it left off)
+        task = run_transcription_campaign_task.delay(str(campaign_id))
+
+        return CampaignActionResponse(
+            campaign_id=campaign_id,
+            action="resume_transcription",
+            success=True,
+            status=CampaignStatus(campaign.status.value),
+            message="Transcription resumed",
+            task_id=task.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{campaign_id}/transcription/retry", response_model=CampaignActionResponse)
+async def retry_transcription(
+    campaign_id: UUID,
+    background_tasks: BackgroundTasks,
+    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
+    service: TopicDiscoveryService = Depends(get_topic_discovery_service),
+):
+    """
+    Retry transcription for a failed campaign.
+
+    This resets the campaign from FAILED status and restarts the transcription process.
+    Only works for campaigns that failed during the transcription stage.
+    """
+    try:
+        # Reset the campaign from FAILED to RUNNING
+        campaign = await service.retry_transcription(campaign_id)
+
+        # Queue the transcription task
+        task = run_transcription_campaign_task.delay(str(campaign_id))
+
+        return CampaignActionResponse(
+            campaign_id=campaign_id,
+            action="retry_transcription",
+            success=True,
+            status=CampaignStatus(campaign.status.value),
+            message="Transcription retry started",
+            task_id=task.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # Bulk Operations

@@ -61,7 +61,7 @@ class TranscriptCleaner:
             'missing_space_after_punctuation': re.compile(r'([.!?,;:])([A-Za-z])'),
             'multiple_punctuation': re.compile(r'([.!?]){2,}'),
             'quotes_normalization': re.compile(r'[""]'),
-            'apostrophe_normalization': re.compile(r'['']'),
+            'apostrophe_normalization': re.compile(r"['\u2018\u2019]"),
             'dash_normalization': re.compile(r'[–—]'),
             'ellipsis_normalization': re.compile(r'\.{3,}')
         }
