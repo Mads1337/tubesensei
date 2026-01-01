@@ -1,0 +1,70 @@
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <!-- Overall Status -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">System Status</p>
+                <p class="text-2xl font-bold mt-1
+                    {% if system_status.status == 'healthy' %}text-green-600 dark:text-green-400
+                    {% elif system_status.status == 'degraded' %}text-yellow-600 dark:text-yellow-400
+                    {% else %}text-red-600 dark:text-red-400{% endif %}">
+                    {{ system_status.status | title }}
+                </p>
+            </div>
+            <div class="w-12 h-12 rounded-full flex items-center justify-center
+                {% if system_status.status == 'healthy' %}bg-green-100 dark:bg-green-900
+                {% elif system_status.status == 'degraded' %}bg-yellow-100 dark:bg-yellow-900
+                {% else %}bg-red-100 dark:bg-red-900{% endif %}">
+                {% if system_status.status == 'healthy' %}
+                <i class="fas fa-check text-green-600 dark:text-green-400 text-xl"></i>
+                {% elif system_status.status == 'degraded' %}
+                <i class="fas fa-exclamation text-yellow-600 dark:text-yellow-400 text-xl"></i>
+                {% else %}
+                <i class="fas fa-times text-red-600 dark:text-red-400 text-xl"></i>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Database Status -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Database</p>
+                <p class="text-2xl font-bold mt-1
+                    {% if system_status.database == 'healthy' %}text-green-600 dark:text-green-400
+                    {% else %}text-red-600 dark:text-red-400{% endif %}">
+                    {{ system_status.database | title }}
+                </p>
+            </div>
+            <div class="w-12 h-12 rounded-full flex items-center justify-center
+                {% if system_status.database == 'healthy' %}bg-green-100 dark:bg-green-900
+                {% else %}bg-red-100 dark:bg-red-900{% endif %}">
+                <i class="fas fa-database text-xl
+                    {% if system_status.database == 'healthy' %}text-green-600 dark:text-green-400
+                    {% else %}text-red-600 dark:text-red-400{% endif %}"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Redis Status -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Redis</p>
+                <p class="text-2xl font-bold mt-1
+                    {% if system_status.redis == 'healthy' %}text-green-600 dark:text-green-400
+                    {% else %}text-red-600 dark:text-red-400{% endif %}">
+                    {{ system_status.redis | title }}
+                </p>
+            </div>
+            <div class="w-12 h-12 rounded-full flex items-center justify-center
+                {% if system_status.redis == 'healthy' %}bg-green-100 dark:bg-green-900
+                {% else %}bg-red-100 dark:bg-red-900{% endif %}">
+                <i class="fas fa-memory text-xl
+                    {% if system_status.redis == 'healthy' %}text-green-600 dark:text-green-400
+                    {% else %}text-red-600 dark:text-red-400{% endif %}"></i>
+            </div>
+        </div>
+    </div>
+</div>

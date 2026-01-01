@@ -1,0 +1,43 @@
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+        <i class="fas fa-exclamation-triangle text-red-500 mr-2"></i>Recent Errors
+        {% if error_summary.total > 0 %}
+        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+            {{ error_summary.total }} in 24h
+        </span>
+        {% endif %}
+    </h2>
+    <div class="space-y-3">
+        {% for error in error_summary.errors %}
+        <div class="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+            <div class="flex items-start justify-between">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                            {{ error.job_type | replace('_', ' ') | title }}
+                        </span>
+                        <span class="text-sm text-red-600 dark:text-red-400 font-medium">
+                            x{{ error.count }}
+                        </span>
+                    </div>
+                    <p class="text-sm text-red-700 dark:text-red-300 mt-1 truncate" title="{{ error.error }}">
+                        {{ error.error[:100] }}{% if error.error|length > 100 %}...{% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center py-6">
+            <i class="fas fa-check-circle text-4xl text-green-500 mb-2"></i>
+            <p class="text-gray-500 dark:text-gray-400">No errors in the last 24 hours</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% if error_summary.errors %}
+    <div class="mt-4 text-center">
+        <a href="/admin/jobs/?status=failed" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400">
+            View all failed jobs <i class="fas fa-arrow-right ml-1"></i>
+        </a>
+    </div>
+    {% endif %}
+</div>

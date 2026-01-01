@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Monitoring - TubeSensei Admin{% endblock %}
+
+{% block page_title %}System Monitoring{% endblock %}
+{% block page_description %}Real-time system health and performance metrics{% endblock %}
+
+{% block content %}
+<div class="monitoring-container">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">System Monitoring</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Last updated: <span id="last-updated">{{ system_status.timestamp }}</span>
+            </p>
+        </div>
+        <button
+            hx-get="/admin/monitoring/"
+            hx-target="body"
+            hx-swap="outerHTML"
+            class="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+        >
+            <i class="fas fa-sync-alt mr-2"></i>
+            Refresh All
+        </button>
+    </div>
+
+    <!-- Health Status Cards -->
+    <div id="health-cards" hx-get="/admin/monitoring/health" hx-trigger="every 30s" hx-swap="innerHTML">
+        {% include "admin/monitoring/partials/health_cards.html" %}
+    </div>
+
+    <!-- Stats Cards -->
+    <div id="stats-cards" class="mt-6" hx-get="/admin/monitoring/stats" hx-trigger="every 30s" hx-swap="innerHTML">
+        {% include "admin/monitoring/partials/stats_cards.html" %}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <!-- Recent Jobs -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <i class="fas fa-tasks text-blue-500 mr-2"></i>Recent Jobs
+            </h2>
+            <div class="space-y-3">
+                {% for job in recent_jobs %}
+                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <div class="flex items-center gap-3">
+                        {% if job.status == 'completed' %}
+                        <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                        {% elif job.status == 'running' %}
+                        <span class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                        {% elif job.status == 'failed' %}
+                        <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+                        {% elif job.status == 'pending' %}
+                        <span class="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                        {% else %}
+                        <span class="w-2 h-2 bg-gray-500 rounded-full"></span>
+                        {% endif %}
+                        <div>
+                            <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                {{ job.type | replace('_', ' ') | title }}
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                {{ job.entity_type }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                            {% if job.duration %}
+                                {{ "%.1f"|format(job.duration) }}s
+                            {% elif job.status == 'running' %}
+                                <i class="fas fa-spinner fa-spin"></i>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
+                        <a href="/admin/jobs/{{ job.id }}" class="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                            View
+                        </a>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-gray-500 dark:text-gray-400 text-center py-4">No recent jobs</p>
+                {% endfor %}
+            </div>
+            <div class="mt-4 text-center">
+                <a href="/admin/jobs/" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                    View all jobs <i class="fas fa-arrow-right ml-1"></i>
+                </a>
+            </div>
+        </div>
+
+        <!-- Error Summary -->
+        <div id="error-summary" hx-get="/admin/monitoring/errors" hx-trigger="every 60s" hx-swap="innerHTML">
+            {% include "admin/monitoring/partials/error_list.html" %}
+        </div>
+    </div>
+
+    <!-- Queue Status -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+            <i class="fas fa-layer-group text-purple-500 mr-2"></i>Queue Status
+        </h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+            {% for job_type, count in queue_status.by_type.items() %}
+            <div class="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div class="text-2xl font-bold text-gray-900 dark:text-white">{{ count }}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ job_type | replace('_', ' ') | title }}</div>
+            </div>
+            {% else %}
+            <div class="col-span-full text-center text-gray-500 dark:text-gray-400 py-4">
+                Queue is empty
+            </div>
+            {% endfor %}
+        </div>
+        {% if queue_status.total_queued > 0 %}
+        <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-500 dark:text-gray-400">Total queued</span>
+                <span class="font-medium text-gray-900 dark:text-white">{{ queue_status.total_queued }}</span>
+            </div>
+            {% if queue_status.average_wait_seconds > 0 %}
+            <div class="flex items-center justify-between text-sm mt-2">
+                <span class="text-gray-500 dark:text-gray-400">Average wait time</span>
+                <span class="font-medium text-gray-900 dark:text-white">{{ "%.1f"|format(queue_status.average_wait_seconds) }}s</span>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

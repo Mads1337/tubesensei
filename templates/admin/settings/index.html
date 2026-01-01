@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - TubeSensei Admin{% endblock %}
+
+{% block page_title %}Settings{% endblock %}
+{% block page_description %}System configuration and settings{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">System Settings</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Read-only view of system configuration. Settings are configured via environment variables.
+            </p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Application Settings -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <i class="fas fa-cog text-primary-500 mr-2"></i>Application
+            </h2>
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Name</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.app.name }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Version</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.app.version }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Environment</dt>
+                    <dd>
+                        {% if settings_data.app.environment == 'production' %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            Production
+                        </span>
+                        {% elif settings_data.app.environment == 'staging' %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                            Staging
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            Development
+                        </span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Debug Mode</dt>
+                    <dd>
+                        {% if settings_data.app.debug %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                            Enabled
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                            Disabled
+                        </span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Server</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.app.host }}:{{ settings_data.app.port }}</dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- API Keys Status -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <i class="fas fa-key text-yellow-500 mr-2"></i>API Keys
+            </h2>
+            <dl class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">YouTube API</dt>
+                    <dd>
+                        {% if settings_data.api_keys.youtube_configured %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            <i class="fas fa-check mr-1"></i>Configured
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                            <i class="fas fa-times mr-1"></i>Not Configured
+                        </span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between items-center">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">OpenAI API</dt>
+                    <dd>
+                        {% if settings_data.api_keys.openai_configured %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            <i class="fas fa-check mr-1"></i>Configured
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                            <i class="fas fa-minus mr-1"></i>Not Configured
+                        </span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between items-center">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Anthropic API</dt>
+                    <dd>
+                        {% if settings_data.api_keys.anthropic_configured %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            <i class="fas fa-check mr-1"></i>Configured
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                            <i class="fas fa-minus mr-1"></i>Not Configured
+                        </span>
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- Feature Flags -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <i class="fas fa-toggle-on text-green-500 mr-2"></i>Feature Flags
+            </h2>
+            <dl class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">User Registration</dt>
+                    <dd>
+                        {% if settings_data.features.registration_enabled %}
+                        <span class="text-green-600 dark:text-green-400"><i class="fas fa-check-circle"></i></span>
+                        {% else %}
+                        <span class="text-gray-400"><i class="fas fa-times-circle"></i></span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between items-center">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">API Documentation</dt>
+                    <dd>
+                        {% if settings_data.features.api_docs_enabled %}
+                        <span class="text-green-600 dark:text-green-400"><i class="fas fa-check-circle"></i></span>
+                        {% else %}
+                        <span class="text-gray-400"><i class="fas fa-times-circle"></i></span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between items-center">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Metrics Collection</dt>
+                    <dd>
+                        {% if settings_data.features.metrics_enabled %}
+                        <span class="text-green-600 dark:text-green-400"><i class="fas fa-check-circle"></i></span>
+                        {% else %}
+                        <span class="text-gray-400"><i class="fas fa-times-circle"></i></span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between items-center">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Health Checks</dt>
+                    <dd>
+                        {% if settings_data.features.health_checks_enabled %}
+                        <span class="text-green-600 dark:text-green-400"><i class="fas fa-check-circle"></i></span>
+                        {% else %}
+                        <span class="text-gray-400"><i class="fas fa-times-circle"></i></span>
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- Security Settings -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <i class="fas fa-shield-alt text-red-500 mr-2"></i>Security
+            </h2>
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Session Expiry</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.security.session_expire_hours }} hours</dd>
+                </div>
+                <div class="flex justify-between items-center">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Rate Limiting</dt>
+                    <dd>
+                        {% if settings_data.security.rate_limit_enabled %}
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.security.rate_limit_rpm }} req/min</span>
+                        {% else %}
+                        <span class="text-gray-400">Disabled</span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Max Login Attempts</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.security.login_attempts_max }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Lockout Duration</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.security.login_lockout_minutes }} minutes</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Min Password Length</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.security.password_min_length }} characters</dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- Topic Discovery Settings -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <i class="fas fa-compass text-purple-500 mr-2"></i>Topic Discovery
+            </h2>
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Default Video Limit</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.topic_discovery.default_video_limit }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Default Channel Limit</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.topic_discovery.default_channel_limit }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Search Limit</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.topic_discovery.search_limit }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Similar Video Depth</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.topic_discovery.similar_depth }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Filter Threshold</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.topic_discovery.filter_threshold }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Filter Model</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.topic_discovery.filter_model }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Max Concurrent Agents</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.topic_discovery.max_concurrent_agents }}</dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- Database Settings -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <i class="fas fa-database text-blue-500 mr-2"></i>Database
+            </h2>
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Pool Size</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.database.pool_size }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Max Overflow</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.database.pool_max_overflow }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Pool Timeout</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.database.pool_timeout }}s</dd>
+                </div>
+                <div class="flex justify-between items-center">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">SQL Echo</dt>
+                    <dd>
+                        {% if settings_data.database.echo %}
+                        <span class="text-green-600 dark:text-green-400"><i class="fas fa-check-circle"></i></span>
+                        {% else %}
+                        <span class="text-gray-400"><i class="fas fa-times-circle"></i></span>
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- Redis Settings -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <i class="fas fa-memory text-red-500 mr-2"></i>Redis
+            </h2>
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Max Connections</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.redis.max_connections }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Socket Timeout</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.redis.socket_timeout }}s</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Connection Timeout</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.redis.connection_timeout }}s</dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- Logging Settings -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <i class="fas fa-file-alt text-gray-500 mr-2"></i>Logging
+            </h2>
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Level</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.logging.level }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Format</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.logging.format }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Rotation</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.logging.rotation }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Retention</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.logging.retention }}</dd>
+                </div>
+            </dl>
+        </div>
+
+        <!-- Admin UI Settings -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <i class="fas fa-desktop text-indigo-500 mr-2"></i>Admin UI
+            </h2>
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Default Page Size</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.admin.pagination_default }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Max Page Size</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.admin.pagination_max }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Default Theme</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.admin.ui_theme | title }}</dd>
+                </div>
+                <div class="flex justify-between items-center">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Enable Docs</dt>
+                    <dd>
+                        {% if settings_data.admin.enable_docs %}
+                        <span class="text-green-600 dark:text-green-400"><i class="fas fa-check-circle"></i></span>
+                        {% else %}
+                        <span class="text-gray-400"><i class="fas fa-times-circle"></i></span>
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+
+    <!-- Info Notice -->
+    <div class="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <div class="flex">
+            <i class="fas fa-info-circle text-blue-500 mt-0.5 mr-3"></i>
+            <div>
+                <h3 class="text-sm font-medium text-blue-800 dark:text-blue-200">Configuration via Environment Variables</h3>
+                <p class="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                    All settings are configured through environment variables or the <code class="bg-blue-100 dark:bg-blue-900 px-1 rounded">.env</code> file.
+                    Changes require a server restart to take effect.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

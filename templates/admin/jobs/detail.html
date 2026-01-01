@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}Job Details - TubeSensei Admin{% endblock %}
+
+{% block page_title %}Job Details{% endblock %}
+{% block page_description %}View job information and execution details{% endblock %}
+
+{% block content %}
+<div class="job-detail-container">
+    <!-- Back Link -->
+    <div class="mb-4">
+        <a href="/admin/jobs/" class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+            <i class="fas fa-arrow-left mr-2"></i>Back to Jobs
+        </a>
+    </div>
+
+    <!-- Job Header -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                    {{ job.job_type | replace('_', ' ') | title }}
+                </h1>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    ID: {{ job.id }}
+                </p>
+            </div>
+            <div class="flex items-center gap-3">
+                {% if job.status == 'pending' %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                    <i class="fas fa-clock mr-2"></i> Pending
+                </span>
+                {% elif job.status == 'running' %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                    <i class="fas fa-spinner fa-spin mr-2"></i> Running
+                </span>
+                {% elif job.status == 'completed' %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                    <i class="fas fa-check mr-2"></i> Completed
+                </span>
+                {% elif job.status == 'failed' %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                    <i class="fas fa-times mr-2"></i> Failed
+                </span>
+                {% elif job.status == 'cancelled' %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                    <i class="fas fa-ban mr-2"></i> Cancelled
+                </span>
+                {% endif %}
+
+                {% if job.can_retry %}
+                <button
+                    hx-post="/admin/jobs/{{ job.id }}/retry"
+                    hx-swap="none"
+                    class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                >
+                    <i class="fas fa-redo mr-2"></i>Retry
+                </button>
+                {% endif %}
+                {% if not job.is_complete %}
+                <button
+                    hx-post="/admin/jobs/{{ job.id }}/cancel"
+                    hx-swap="none"
+                    hx-confirm="Are you sure you want to cancel this job?"
+                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                    <i class="fas fa-times mr-2"></i>Cancel
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if job.is_running %}
+        <div class="mt-4">
+            <div class="flex items-center">
+                <div class="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-3">
+                    <div class="bg-blue-500 rounded-full h-3 transition-all" style="width: {{ job.progress_percent }}%"></div>
+                </div>
+                <span class="ml-3 text-sm text-gray-600 dark:text-gray-400">{{ job.progress_percent|round|int }}%</span>
+            </div>
+            {% if job.progress_message %}
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">{{ job.progress_message }}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Job Information -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Job Information</h2>
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Entity Type</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ job.entity_type }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Entity ID</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white font-mono">{{ job.entity_id }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Priority</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ job.priority }}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Retry Count</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ job.retry_count }} / {{ job.max_retries }}</dd>
+                </div>
+                {% if job.worker_id %}
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Worker</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white font-mono">{{ job.worker_id }}</dd>
+                </div>
+                {% endif %}
+            </dl>
+        </div>
+
+        <!-- Timestamps -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Timestamps</h2>
+            <dl class="space-y-3">
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Created</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                        {% if job.created_at %}{{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}-{% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Scheduled</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                        {% if job.scheduled_at %}{{ job.scheduled_at.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}-{% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Started</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                        {% if job.started_at %}{{ job.started_at.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}-{% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Completed</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                        {% if job.completed_at %}{{ job.completed_at.strftime('%Y-%m-%d %H:%M:%S') }}{% else %}-{% endif %}
+                    </dd>
+                </div>
+                {% if job.execution_time_seconds %}
+                <div class="flex justify-between">
+                    <dt class="text-sm text-gray-500 dark:text-gray-400">Duration</dt>
+                    <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                        {% if job.execution_time_seconds < 60 %}
+                            {{ job.execution_time_seconds|round(2) }} seconds
+                        {% elif job.execution_time_seconds < 3600 %}
+                            {{ (job.execution_time_seconds / 60)|round(2) }} minutes
+                        {% else %}
+                            {{ (job.execution_time_seconds / 3600)|round(2) }} hours
+                        {% endif %}
+                    </dd>
+                </div>
+                {% endif %}
+            </dl>
+        </div>
+    </div>
+
+    {% if job.error_message %}
+    <!-- Error Details -->
+    <div class="bg-red-50 dark:bg-red-900/20 rounded-lg shadow p-6 mt-6">
+        <h2 class="text-lg font-semibold text-red-800 dark:text-red-200 mb-4">
+            <i class="fas fa-exclamation-triangle mr-2"></i>Error Details
+        </h2>
+        <p class="text-red-700 dark:text-red-300 mb-4">{{ job.error_message }}</p>
+        {% if job.error_details %}
+        <pre class="bg-red-100 dark:bg-red-900/40 p-4 rounded text-sm text-red-800 dark:text-red-200 overflow-x-auto">{{ job.error_details | tojson(indent=2) }}</pre>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if job.input_data %}
+    <!-- Input Data -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Input Data</h2>
+        <pre class="bg-gray-100 dark:bg-gray-900 p-4 rounded text-sm text-gray-800 dark:text-gray-200 overflow-x-auto">{{ job.input_data | tojson(indent=2) }}</pre>
+    </div>
+    {% endif %}
+
+    {% if job.output_data %}
+    <!-- Output Data -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Output Data</h2>
+        <pre class="bg-gray-100 dark:bg-gray-900 p-4 rounded text-sm text-gray-800 dark:text-gray-200 overflow-x-auto">{{ job.output_data | tojson(indent=2) }}</pre>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

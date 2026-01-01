@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Transcripts - TubeSensei Admin{% endblock %}
+
+{% block page_title %}Transcripts{% endblock %}
+{% block page_description %}Browse and search video transcripts{% endblock %}
+
+{% block content %}
+<div class="transcripts-container">
+    <!-- Header with Stats -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Transcripts</h1>
+            <div class="flex gap-4 mt-2 text-sm">
+                <span class="text-gray-600 dark:text-gray-400">
+                    <span class="font-semibold text-gray-900 dark:text-white">{{ stats.total }}</span> total
+                </span>
+                <span class="text-blue-600 dark:text-blue-400">
+                    <span class="font-semibold">{{ stats.auto_generated }}</span> auto-generated
+                </span>
+                <span class="text-green-600 dark:text-green-400">
+                    <span class="font-semibold">{{ stats.manual }}</span> manual
+                </span>
+                <span class="text-purple-600 dark:text-purple-400">
+                    <span class="font-semibold">{{ "{:,}".format(stats.total_words|int) }}</span> words
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-6">
+        <form id="filter-form" hx-get="/admin/transcripts/" hx-target="#transcripts-list-container" hx-swap="innerHTML" hx-push-url="true">
+            <div class="flex flex-wrap gap-4">
+                <div class="flex-1 min-w-[200px]">
+                    <input
+                        type="text"
+                        name="search"
+                        placeholder="Search in transcripts..."
+                        value="{{ filters.search or '' }}"
+                        class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                        hx-get="/admin/transcripts/"
+                        hx-trigger="keyup changed delay:500ms"
+                        hx-target="#transcripts-list-container"
+                        hx-swap="innerHTML"
+                        hx-include="#filter-form"
+                    >
+                </div>
+                <select
+                    name="language"
+                    class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                    hx-get="/admin/transcripts/"
+                    hx-trigger="change"
+                    hx-target="#transcripts-list-container"
+                    hx-swap="innerHTML"
+                    hx-include="#filter-form"
+                >
+                    <option value="">All Languages</option>
+                    {% for lang in languages %}
+                    <option value="{{ lang }}" {% if filters.language == lang %}selected{% endif %}>
+                        {{ lang | upper }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <select
+                    name="source"
+                    class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                    hx-get="/admin/transcripts/"
+                    hx-trigger="change"
+                    hx-target="#transcripts-list-container"
+                    hx-swap="innerHTML"
+                    hx-include="#filter-form"
+                >
+                    <option value="">All Sources</option>
+                    {% for src in sources %}
+                    <option value="{{ src }}" {% if filters.source == src %}selected{% endif %}>
+                        {{ src | replace('_', ' ') | title }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <select
+                    name="channel_id"
+                    class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                    hx-get="/admin/transcripts/"
+                    hx-trigger="change"
+                    hx-target="#transcripts-list-container"
+                    hx-swap="innerHTML"
+                    hx-include="#filter-form"
+                >
+                    <option value="">All Channels</option>
+                    {% for channel in channels %}
+                    <option value="{{ channel.id }}" {% if filters.channel_id == channel.id %}selected{% endif %}>
+                        {{ channel.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <button
+                    type="button"
+                    class="px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    onclick="clearFilters()"
+                >
+                    Clear
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Transcripts List -->
+    <div id="transcripts-list-container">
+        {% include "admin/transcripts/partials/transcript_list.html" %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function clearFilters() {
+    const form = document.getElementById('filter-form');
+    form.querySelectorAll('input, select').forEach(el => {
+        el.value = '';
+    });
+    htmx.trigger(form.querySelector('input[name="search"]'), 'change');
+}
+</script>
+{% endblock %}

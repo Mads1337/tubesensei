@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Jobs - TubeSensei Admin{% endblock %}
+
+{% block page_title %}Jobs{% endblock %}
+{% block page_description %}Monitor and manage background processing jobs{% endblock %}
+
+{% block content %}
+<div class="jobs-container">
+    <!-- Header with Stats -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Jobs</h1>
+            <div class="flex gap-4 mt-2 text-sm">
+                <span class="text-gray-600 dark:text-gray-400">
+                    <span class="font-semibold text-gray-900 dark:text-white">{{ stats.total }}</span> total
+                </span>
+                <span class="text-yellow-600 dark:text-yellow-400">
+                    <span class="font-semibold">{{ stats.pending }}</span> pending
+                </span>
+                <span class="text-blue-600 dark:text-blue-400">
+                    <span class="font-semibold">{{ stats.running }}</span> running
+                </span>
+                <span class="text-green-600 dark:text-green-400">
+                    <span class="font-semibold">{{ stats.completed }}</span> completed
+                </span>
+                {% if stats.failed > 0 %}
+                <span class="text-red-600 dark:text-red-400">
+                    <span class="font-semibold">{{ stats.failed }}</span> failed
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        <button
+            type="button"
+            hx-get="/admin/jobs/"
+            hx-target="#jobs-table-container"
+            hx-swap="innerHTML"
+            class="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+        >
+            <i class="fas fa-sync-alt mr-2"></i>
+            Refresh
+        </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-6">
+        <form id="filter-form" hx-get="/admin/jobs/" hx-target="#jobs-table-container" hx-swap="innerHTML" hx-push-url="true">
+            <div class="flex flex-wrap gap-4">
+                <select
+                    name="status"
+                    class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                    hx-get="/admin/jobs/"
+                    hx-trigger="change"
+                    hx-target="#jobs-table-container"
+                    hx-swap="innerHTML"
+                    hx-include="#filter-form"
+                >
+                    <option value="">All Status</option>
+                    {% for status in job_statuses %}
+                    <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>
+                        {{ status | replace('_', ' ') | title }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <select
+                    name="job_type"
+                    class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                    hx-get="/admin/jobs/"
+                    hx-trigger="change"
+                    hx-target="#jobs-table-container"
+                    hx-swap="innerHTML"
+                    hx-include="#filter-form"
+                >
+                    <option value="">All Types</option>
+                    {% for jtype in job_types %}
+                    <option value="{{ jtype }}" {% if filters.job_type == jtype %}selected{% endif %}>
+                        {{ jtype | replace('_', ' ') | title }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <button
+                    type="button"
+                    class="px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    onclick="clearFilters()"
+                >
+                    Clear
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Jobs Table -->
+    <div id="jobs-table-container" hx-get="/admin/jobs/" hx-trigger="every 10s" hx-swap="innerHTML">
+        {% include "admin/jobs/partials/jobs_table.html" %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function clearFilters() {
+    const form = document.getElementById('filter-form');
+    form.querySelectorAll('select').forEach(el => {
+        el.value = '';
+    });
+    htmx.trigger(form.querySelector('select[name="status"]'), 'change');
+}
+</script>
+{% endblock %}

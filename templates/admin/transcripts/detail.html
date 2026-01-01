@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Transcript - TubeSensei Admin{% endblock %}
+
+{% block page_title %}Transcript{% endblock %}
+{% block page_description %}View full transcript content{% endblock %}
+
+{% block content %}
+<div class="transcript-detail-container">
+    <!-- Back Link -->
+    <div class="mb-4">
+        <a href="/admin/transcripts/" class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+            <i class="fas fa-arrow-left mr-2"></i>Back to Transcripts
+        </a>
+    </div>
+
+    <!-- Video Header -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <div class="flex flex-col md:flex-row gap-6">
+            <!-- Video Thumbnail -->
+            <div class="flex-shrink-0">
+                {% if transcript.video_thumbnail %}
+                <img src="{{ transcript.video_thumbnail }}" alt="{{ transcript.video_title }}" class="w-64 h-36 object-cover rounded-lg">
+                {% else %}
+                <div class="w-64 h-36 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-video text-gray-400 text-4xl"></i>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Video Info -->
+            <div class="flex-1">
+                <h1 class="text-xl font-bold text-gray-900 dark:text-white">
+                    {{ transcript.video_title }}
+                </h1>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    <a href="/admin/channels/{{ transcript.channel_id }}" class="hover:text-primary-600 dark:hover:text-primary-400">
+                        {{ transcript.channel_name }}
+                    </a>
+                </p>
+
+                <div class="flex flex-wrap items-center gap-3 mt-4">
+                    {% if transcript.is_auto_generated %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                        <i class="fas fa-robot mr-2"></i>Auto-generated
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                        <i class="fas fa-user mr-2"></i>Manual
+                    </span>
+                    {% endif %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                        <i class="fas fa-language mr-2"></i>{{ transcript.language_code | upper }}
+                    </span>
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                        <i class="fas fa-cog mr-2"></i>{{ transcript.source | replace('_', ' ') | title }}
+                    </span>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-4 mt-4 text-sm text-gray-500 dark:text-gray-400">
+                    {% if transcript.word_count %}
+                    <span><i class="fas fa-font mr-1"></i>{{ "{:,}".format(transcript.word_count) }} words</span>
+                    {% endif %}
+                    {% if transcript.char_count %}
+                    <span><i class="fas fa-text-width mr-1"></i>{{ "{:,}".format(transcript.char_count) }} characters</span>
+                    {% endif %}
+                    {% if transcript.confidence_score %}
+                    <span><i class="fas fa-check-circle mr-1"></i>{{ transcript.confidence_score }}% confidence</span>
+                    {% endif %}
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex flex-wrap gap-3 mt-6">
+                    <a href="/admin/transcripts/{{ transcript.id }}/download?format=txt" class="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
+                        <i class="fas fa-download mr-2"></i>Download TXT
+                    </a>
+                    <a href="/admin/transcripts/{{ transcript.id }}/download?format=json" class="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
+                        <i class="fas fa-code mr-2"></i>Download JSON
+                    </a>
+                    {% if transcript.video_youtube_id %}
+                    <a href="https://www.youtube.com/watch?v={{ transcript.video_youtube_id }}" target="_blank" class="inline-flex items-center px-4 py-2 border border-red-600 text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                        <i class="fab fa-youtube mr-2"></i>Watch on YouTube
+                    </a>
+                    {% endif %}
+                    {% if transcript.video_id %}
+                    <a href="/admin/videos/{{ transcript.video_id }}" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        <i class="fas fa-video mr-2"></i>View Video Details
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transcript Content -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Transcript Content</h2>
+            <button onclick="copyTranscript()" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+                <i class="fas fa-copy mr-1"></i>Copy to clipboard
+            </button>
+        </div>
+        <div id="transcript-content" class="prose dark:prose-invert max-w-none">
+            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-6 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-[600px] overflow-y-auto">{{ transcript.content }}</div>
+        </div>
+    </div>
+
+    <!-- Metadata -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Metadata</h2>
+        <dl class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+                <dt class="text-sm text-gray-500 dark:text-gray-400">Created</dt>
+                <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ transcript.created_at.strftime('%Y-%m-%d %H:%M') if transcript.created_at else '-' }}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-sm text-gray-500 dark:text-gray-400">Updated</dt>
+                <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ transcript.updated_at.strftime('%Y-%m-%d %H:%M') if transcript.updated_at else '-' }}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-sm text-gray-500 dark:text-gray-400">Transcript ID</dt>
+                <dd class="text-sm font-medium text-gray-900 dark:text-white font-mono">{{ transcript.id[:8] }}...</dd>
+            </div>
+            <div>
+                <dt class="text-sm text-gray-500 dark:text-gray-400">Video ID</dt>
+                <dd class="text-sm font-medium text-gray-900 dark:text-white font-mono">{{ transcript.video_id[:8] if transcript.video_id else '-' }}...</dd>
+            </div>
+        </dl>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyTranscript() {
+    const content = document.querySelector('#transcript-content div').innerText;
+    navigator.clipboard.writeText(content).then(() => {
+        // Show a toast or notification
+        alert('Transcript copied to clipboard!');
+    });
+}
+</script>
+{% endblock %}
