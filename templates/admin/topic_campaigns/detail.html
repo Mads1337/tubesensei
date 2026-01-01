@@ -147,9 +147,9 @@
     </div>
 
     <!-- Tabs -->
-    <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg" x-data="{ activeTab: 'videos' }">
         <div class="border-b border-gray-200 dark:border-gray-700">
-            <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs" x-data="{ activeTab: 'videos' }">
+            <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
                 <button
                     @click="activeTab = 'videos'"
                     :class="activeTab === 'videos' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
@@ -182,9 +182,11 @@
                     <i class="fas fa-cog mr-2"></i>
                     Configuration
                 </button>
+            </nav>
+        </div>
 
-                <!-- Tab Content -->
-                <div class="p-6 w-full">
+        <!-- Tab Content -->
+        <div class="p-6">
                     <!-- Videos Tab -->
                     <div x-show="activeTab === 'videos'" class="w-full">
                         <div class="flex justify-between items-center mb-4">
@@ -328,7 +330,6 @@
                         </div>
                     </div>
                 </div>
-            </nav>
         </div>
     </div>
 
@@ -352,11 +353,12 @@
 {% block scripts %}
 <script>
 function campaignDashboard(campaignId) {
-    return {
-        campaignId: campaignId,
-        status: '{{ campaign.status.value | title }}',
-        progress: {{ campaign.progress_percent or 0 }},
-        eta: {{ ("'" + campaign.estimated_completion_at.isoformat() + "'") if campaign.estimated_completion_at else 'null' }},
+    try {
+        return {
+            campaignId: campaignId,
+            status: '{{ campaign.status.value | title }}',
+            progress: {{ campaign.progress_percent or 0 }},
+            eta: {% if campaign.estimated_completion_at %}'{{ campaign.estimated_completion_at.isoformat() }}'{% else %}null{% endif %},
         stats: {
             videos_discovered: {{ campaign.total_videos_discovered or 0 }},
             videos_relevant: {{ campaign.total_videos_relevant or 0 }},
@@ -364,7 +366,7 @@ function campaignDashboard(campaignId) {
             channels_explored: {{ campaign.total_channels_explored or 0 }},
             api_calls: {{ campaign.api_calls_made or 0 }},
             llm_calls: {{ campaign.llm_calls_made or 0 }},
-            filter_acceptance_rate: {{ (campaign.total_videos_relevant / campaign.total_videos_discovered) if campaign.total_videos_discovered else 0 }}
+            filter_acceptance_rate: {{ "%.4f"|format((campaign.total_videos_relevant / campaign.total_videos_discovered) if campaign.total_videos_discovered and campaign.total_videos_discovered > 0 else 0) }}
         },
         pollInterval: null,
         ws: null,
@@ -611,6 +613,18 @@ function campaignDashboard(campaignId) {
             }
         }
     };
+    } catch (e) {
+        console.error('Error initializing campaign dashboard:', e);
+        return {
+            campaignId: campaignId,
+            status: 'Unknown',
+            progress: 0,
+            eta: null,
+            stats: { videos_discovered: 0, videos_relevant: 0, videos_filtered: 0, channels_explored: 0, api_calls: 0, llm_calls: 0, filter_acceptance_rate: 0 },
+            pollInterval: null, ws: null, wsReconnectAttempts: 0, maxReconnectAttempts: 5, reconnectDelay: 2000, useWebSocket: false, lastEventMessage: '',
+            init() {}, formatEta() { return ''; }, connectWebSocket() {}, handleWebSocketMessage() {}, handleCampaignEvent() {}, updateFromHeartbeat() {}, disconnectWebSocket() {}, startPolling() {}, stopPolling() {}, fetchProgress() {}, updateFromProgress() {}
+        };
+    }
 }
 
 async function startCampaign(id) {

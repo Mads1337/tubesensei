@@ -127,7 +127,7 @@
     <!-- Campaigns List -->
     <div id="campaigns-list" class="space-y-4">
         {% for campaign in campaigns %}
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow" data-status="{{ campaign.status.value }}">
             <div class="p-6">
                 <div class="flex items-start justify-between">
                     <div class="flex-1">
@@ -164,27 +164,21 @@
                         {% if campaign.status.value == 'draft' %}
                         <button
                             class="px-3 py-2 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
-                            hx-post="/api/v1/topic-campaigns/{{ campaign.id }}/start"
-                            hx-target="#campaigns-list"
-                            hx-swap="outerHTML"
+                            onclick="startCampaign('{{ campaign.id }}')"
                         >
                             <i class="fas fa-play mr-1"></i> Start
                         </button>
                         {% elif campaign.status.value == 'running' %}
                         <button
                             class="px-3 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600"
-                            hx-post="/api/v1/topic-campaigns/{{ campaign.id }}/pause"
-                            hx-target="#campaigns-list"
-                            hx-swap="outerHTML"
+                            onclick="pauseCampaign('{{ campaign.id }}')"
                         >
                             <i class="fas fa-pause mr-1"></i> Pause
                         </button>
                         {% elif campaign.status.value == 'paused' %}
                         <button
                             class="px-3 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
-                            hx-post="/api/v1/topic-campaigns/{{ campaign.id }}/resume"
-                            hx-target="#campaigns-list"
-                            hx-swap="outerHTML"
+                            onclick="resumeCampaign('{{ campaign.id }}')"
                         >
                             <i class="fas fa-play mr-1"></i> Resume
                         </button>
@@ -288,6 +282,70 @@
 
 {% block scripts %}
 <script>
+// Toast notification function
+function showToast(message, type = 'info') {
+    const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        warning: 'bg-yellow-500',
+        info: 'bg-blue-500'
+    };
+    const toast = document.createElement('div');
+    toast.className = `fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white ${colors[type] || colors.info} shadow-lg z-50 transition-opacity duration-300`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.add('opacity-0');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Campaign action functions
+async function startCampaign(id) {
+    try {
+        const response = await fetch(`/api/v1/topic-campaigns/${id}/start`, { method: 'POST' });
+        if (response.ok) {
+            showToast('Campaign started!', 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            const error = await response.json();
+            showToast(error.detail || 'Failed to start campaign', 'error');
+        }
+    } catch (e) {
+        showToast('Failed to start campaign', 'error');
+    }
+}
+
+async function pauseCampaign(id) {
+    try {
+        const response = await fetch(`/api/v1/topic-campaigns/${id}/pause`, { method: 'POST' });
+        if (response.ok) {
+            showToast('Campaign paused', 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            const error = await response.json();
+            showToast(error.detail || 'Failed to pause campaign', 'error');
+        }
+    } catch (e) {
+        showToast('Failed to pause campaign', 'error');
+    }
+}
+
+async function resumeCampaign(id) {
+    try {
+        const response = await fetch(`/api/v1/topic-campaigns/${id}/resume`, { method: 'POST' });
+        if (response.ok) {
+            showToast('Campaign resumed!', 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            const error = await response.json();
+            showToast(error.detail || 'Failed to resume campaign', 'error');
+        }
+    } catch (e) {
+        showToast('Failed to resume campaign', 'error');
+    }
+}
+
 // Auto-refresh running campaigns every 10 seconds
 let isRefreshing = false;
 setInterval(function() {
@@ -295,15 +353,9 @@ setInterval(function() {
         const runningCampaigns = document.querySelectorAll('[data-status="running"]');
         if (runningCampaigns.length > 0) {
             isRefreshing = true;
-            htmx.trigger('#campaigns-list', 'refresh');
+            window.location.reload();
         }
     }
 }, 10000);
-
-document.body.addEventListener('htmx:afterRequest', function(event) {
-    if (event.detail.target && event.detail.target.id === 'campaigns-list') {
-        isRefreshing = false;
-    }
-});
 </script>
 {% endblock %}
