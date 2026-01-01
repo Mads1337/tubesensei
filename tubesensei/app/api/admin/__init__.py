@@ -8,6 +8,7 @@ from pathlib import Path
 # from .dashboard import router as dashboard_router  # Temporarily disabled
 from .channels import router as channels_router
 from .topic_campaigns import router as topic_campaigns_router
+from .videos import router as videos_router
 from .template_helpers import get_template_context
 
 # Set up templates
@@ -20,11 +21,6 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 @router.get("/", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
     """Main admin dashboard - redirect to channels for now"""
-    return RedirectResponse(url="/admin/channels/", status_code=302)
-
-@router.get("/videos", response_class=HTMLResponse)
-async def admin_videos(request: Request):
-    """Videos page - redirect to channels for now"""
     return RedirectResponse(url="/admin/channels/", status_code=302)
 
 @router.get("/ideas", response_class=HTMLResponse)
@@ -41,3 +37,4 @@ async def admin_jobs(request: Request):
 # router.include_router(dashboard_router)  # Temporarily disabled
 router.include_router(channels_router)
 router.include_router(topic_campaigns_router)
+router.include_router(videos_router)

@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block title %}Videos - TubeSensei Admin{% endblock %}
+
+{% block page_title %}Videos{% endblock %}
+{% block page_description %}Browse and manage all discovered videos{% endblock %}
+
+{% block content %}
+<div class="videos-container">
+    <!-- Header with Stats -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Videos</h1>
+            <div class="flex gap-4 mt-2 text-sm">
+                <span class="text-gray-600 dark:text-gray-400">
+                    <span class="font-semibold text-gray-900 dark:text-white">{{ stats.total }}</span> total
+                </span>
+                <span class="text-green-600 dark:text-green-400">
+                    <span class="font-semibold">{{ stats.completed }}</span> processed
+                </span>
+                <span class="text-blue-600 dark:text-blue-400">
+                    <span class="font-semibold">{{ stats.processing }}</span> processing
+                </span>
+                {% if stats.failed > 0 %}
+                <span class="text-red-600 dark:text-red-400">
+                    <span class="font-semibold">{{ stats.failed }}</span> failed
+                </span>
+                {% endif %}
+                <span class="text-purple-600 dark:text-purple-400">
+                    <span class="font-semibold">{{ stats.valuable }}</span> valuable
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-6">
+        <form id="filter-form" hx-get="/admin/videos/" hx-target="#videos-table-container" hx-swap="innerHTML" hx-push-url="true">
+            <!-- Row 1: Search and Status -->
+            <div class="flex flex-wrap gap-4 mb-4">
+                <div class="flex-1 min-w-[200px]">
+                    <input
+                        type="text"
+                        name="search"
+                        placeholder="Search videos..."
+                        value="{{ filters.search or '' }}"
+                        class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                        hx-get="/admin/videos/"
+                        hx-trigger="keyup changed delay:500ms"
+                        hx-target="#videos-table-container"
+                        hx-swap="innerHTML"
+                        hx-include="#filter-form"
+                    >
+                </div>
+                <select
+                    name="status"
+                    class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                    hx-get="/admin/videos/"
+                    hx-trigger="change"
+                    hx-target="#videos-table-container"
+                    hx-swap="innerHTML"
+                    hx-include="#filter-form"
+                >
+                    <option value="">All Status</option>
+                    {% for status in video_statuses %}
+                    <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>
+                        {{ status | replace('_', ' ') | title }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <select
+                    name="channel_id"
+                    class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                    hx-get="/admin/videos/"
+                    hx-trigger="change"
+                    hx-target="#videos-table-container"
+                    hx-swap="innerHTML"
+                    hx-include="#filter-form"
+                >
+                    <option value="">All Channels</option>
+                    {% for channel in channels %}
+                    <option value="{{ channel.id }}" {% if filters.channel_id == channel.id %}selected{% endif %}>
+                        {{ channel.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <select
+                    name="valuable"
+                    class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                    hx-get="/admin/videos/"
+                    hx-trigger="change"
+                    hx-target="#videos-table-container"
+                    hx-swap="innerHTML"
+                    hx-include="#filter-form"
+                >
+                    <option value="">All Videos</option>
+                    <option value="true" {% if filters.valuable == 'true' %}selected{% endif %}>Valuable</option>
+                    <option value="false" {% if filters.valuable == 'false' %}selected{% endif %}>Not Valuable</option>
+                    <option value="unrated" {% if filters.valuable == 'unrated' %}selected{% endif %}>Unrated</option>
+                </select>
+            </div>
+
+            <!-- Row 2: Date Range, Duration, Views, Sort -->
+            <div class="flex flex-wrap gap-4 items-end">
+                <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Published From</label>
+                    <input
+                        type="date"
+                        name="date_from"
+                        value="{{ filters.date_from or '' }}"
+                        class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                        hx-get="/admin/videos/"
+                        hx-trigger="change"
+                        hx-target="#videos-table-container"
+                        hx-swap="innerHTML"
+                        hx-include="#filter-form"
+                    >
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Published To</label>
+                    <input
+                        type="date"
+                        name="date_to"
+                        value="{{ filters.date_to or '' }}"
+                        class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                        hx-get="/admin/videos/"
+                        hx-trigger="change"
+                        hx-target="#videos-table-container"
+                        hx-swap="innerHTML"
+                        hx-include="#filter-form"
+                    >
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Duration (min)</label>
+                    <div class="flex gap-1 items-center">
+                        <input
+                            type="number"
+                            name="min_duration"
+                            placeholder="Min"
+                            value="{{ filters.min_duration or '' }}"
+                            class="w-20 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                            hx-get="/admin/videos/"
+                            hx-trigger="change"
+                            hx-target="#videos-table-container"
+                            hx-swap="innerHTML"
+                            hx-include="#filter-form"
+                        >
+                        <span class="text-gray-400">-</span>
+                        <input
+                            type="number"
+                            name="max_duration"
+                            placeholder="Max"
+                            value="{{ filters.max_duration or '' }}"
+                            class="w-20 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                            hx-get="/admin/videos/"
+                            hx-trigger="change"
+                            hx-target="#videos-table-container"
+                            hx-swap="innerHTML"
+                            hx-include="#filter-form"
+                        >
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Views</label>
+                    <div class="flex gap-1 items-center">
+                        <input
+                            type="number"
+                            name="min_views"
+                            placeholder="Min"
+                            value="{{ filters.min_views or '' }}"
+                            class="w-24 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                            hx-get="/admin/videos/"
+                            hx-trigger="change"
+                            hx-target="#videos-table-container"
+                            hx-swap="innerHTML"
+                            hx-include="#filter-form"
+                        >
+                        <span class="text-gray-400">-</span>
+                        <input
+                            type="number"
+                            name="max_views"
+                            placeholder="Max"
+                            value="{{ filters.max_views or '' }}"
+                            class="w-24 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                            hx-get="/admin/videos/"
+                            hx-trigger="change"
+                            hx-target="#videos-table-container"
+                            hx-swap="innerHTML"
+                            hx-include="#filter-form"
+                        >
+                    </div>
+                </div>
+                <div class="flex gap-2 ml-auto">
+                    <select
+                        name="sort_by"
+                        class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                        hx-get="/admin/videos/"
+                        hx-trigger="change"
+                        hx-target="#videos-table-container"
+                        hx-swap="innerHTML"
+                        hx-include="#filter-form"
+                    >
+                        <option value="published_at" {% if filters.sort_by == 'published_at' %}selected{% endif %}>Published Date</option>
+                        <option value="view_count" {% if filters.sort_by == 'view_count' %}selected{% endif %}>Views</option>
+                        <option value="duration_seconds" {% if filters.sort_by == 'duration_seconds' %}selected{% endif %}>Duration</option>
+                        <option value="title" {% if filters.sort_by == 'title' %}selected{% endif %}>Title</option>
+                        <option value="discovered_at" {% if filters.sort_by == 'discovered_at' %}selected{% endif %}>Discovered</option>
+                    </select>
+                    <select
+                        name="sort_order"
+                        class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                        hx-get="/admin/videos/"
+                        hx-trigger="change"
+                        hx-target="#videos-table-container"
+                        hx-swap="innerHTML"
+                        hx-include="#filter-form"
+                    >
+                        <option value="desc" {% if filters.sort_order == 'desc' %}selected{% endif %}>Newest First</option>
+                        <option value="asc" {% if filters.sort_order == 'asc' %}selected{% endif %}>Oldest First</option>
+                    </select>
+                    <button
+                        type="button"
+                        class="px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                        onclick="clearFilters()"
+                    >
+                        Clear
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Videos Table -->
+    <div id="videos-table-container">
+        {% include "admin/videos/partials/video_table.html" %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function clearFilters() {
+    const form = document.getElementById('filter-form');
+    form.querySelectorAll('input, select').forEach(el => {
+        if (el.name === 'sort_by') {
+            el.value = 'published_at';
+        } else if (el.name === 'sort_order') {
+            el.value = 'desc';
+        } else if (el.tagName === 'SELECT') {
+            el.value = '';
+        } else {
+            el.value = '';
+        }
+    });
+    htmx.trigger(form.querySelector('input[name="search"]'), 'change');
+}
+</script>
+{% endblock %}

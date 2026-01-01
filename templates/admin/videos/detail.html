@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}{{ video.title }} - TubeSensei Admin{% endblock %}
+
+{% block page_title %}Video Details{% endblock %}
+{% block page_description %}{{ video.title[:100] }}{% endblock %}
+
+{% block content %}
+<div class="video-detail-container max-w-6xl mx-auto">
+    <!-- Back Link -->
+    <div class="mb-4">
+        <a href="/admin/videos/" class="text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400">
+            <i class="fas fa-arrow-left mr-2"></i>Back to Videos
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Content -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Video Preview -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                <div class="aspect-video relative bg-gray-900">
+                    {% if video.thumbnail_url %}
+                    <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}"
+                         class="w-full h-full object-cover">
+                    {% else %}
+                    <div class="w-full h-full flex items-center justify-center">
+                        <i class="fas fa-video text-gray-600 text-6xl"></i>
+                    </div>
+                    {% endif %}
+                    <a href="{{ video.youtube_url }}" target="_blank"
+                       class="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 hover:opacity-100 transition-opacity">
+                        <span class="w-16 h-16 rounded-full bg-red-600 flex items-center justify-center">
+                            <i class="fas fa-play text-white text-2xl ml-1"></i>
+                        </span>
+                    </a>
+                </div>
+                <div class="p-6">
+                    <h1 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                        {{ video.title }}
+                    </h1>
+                    <div class="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        <a href="/admin/channels/{{ video.channel_id }}"
+                           class="hover:text-primary-600 dark:hover:text-primary-400">
+                            <i class="fas fa-user mr-1"></i>{{ video.channel_name }}
+                        </a>
+                        <span>
+                            <i class="fas fa-calendar mr-1"></i>
+                            {% if video.published_at %}{{ video.published_at.strftime('%B %d, %Y') }}{% else %}Unknown{% endif %}
+                        </span>
+                    </div>
+                    {% if video.description %}
+                    <div class="prose dark:prose-invert max-w-none">
+                        <p class="text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{{ video.description[:1000] }}{% if video.description|length > 1000 %}...{% endif %}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Ideas Generated -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
+                        Ideas Generated ({{ ideas|length }})
+                    </h2>
+                </div>
+                <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% if ideas %}
+                        {% for idea in ideas %}
+                        <div class="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <h3 class="font-medium text-gray-900 dark:text-white mb-1">{{ idea.title }}</h3>
+                            {% if idea.description %}
+                            <p class="text-sm text-gray-600 dark:text-gray-400">{{ idea.description[:200] }}{% if idea.description|length > 200 %}...{% endif %}</p>
+                            {% endif %}
+                            <span class="text-xs text-gray-500 dark:text-gray-500 mt-2 block">
+                                {{ idea.created_at.strftime('%Y-%m-%d %H:%M') if idea.created_at else '' }}
+                            </span>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="p-6 text-center text-gray-500 dark:text-gray-400">
+                            <i class="fas fa-lightbulb text-4xl mb-2 opacity-50"></i>
+                            <p>No ideas generated yet</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Stats Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Statistics</h2>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600 dark:text-gray-400">Duration</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ video.duration_formatted or 'N/A' }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600 dark:text-gray-400">Views</span>
+                        <span class="font-medium text-gray-900 dark:text-white">
+                            {% if video.view_count %}{{ "{:,}".format(video.view_count) }}{% else %}N/A{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600 dark:text-gray-400">Likes</span>
+                        <span class="font-medium text-gray-900 dark:text-white">
+                            {% if video.like_count %}{{ "{:,}".format(video.like_count) }}{% else %}N/A{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600 dark:text-gray-400">Comments</span>
+                        <span class="font-medium text-gray-900 dark:text-white">
+                            {% if video.comment_count %}{{ "{:,}".format(video.comment_count) }}{% else %}N/A{% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Processing Status</h2>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400 text-sm">Status</span>
+                        <div class="mt-1">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium
+                                {% if video.status == 'completed' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                                {% elif video.status == 'processing' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300
+                                {% elif video.status == 'queued' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300
+                                {% elif video.status == 'failed' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300
+                                {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300{% endif %}">
+                                {{ video.status | replace('_', ' ') | title }}
+                            </span>
+                        </div>
+                    </div>
+
+                    {% if video.error_message %}
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400 text-sm">Error</span>
+                        <div class="mt-1 p-2 bg-red-50 dark:bg-red-900/30 rounded text-sm text-red-700 dark:text-red-300">
+                            {{ video.error_message }}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600 dark:text-gray-400 text-sm">Discovered</span>
+                        <span class="text-sm text-gray-900 dark:text-white">
+                            {% if video.discovered_at %}{{ video.discovered_at.strftime('%Y-%m-%d %H:%M') }}{% else %}N/A{% endif %}
+                        </span>
+                    </div>
+
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600 dark:text-gray-400 text-sm">Processed</span>
+                        <span class="text-sm text-gray-900 dark:text-white">
+                            {% if video.processed_at %}{{ video.processed_at.strftime('%Y-%m-%d %H:%M') }}{% else %}Not yet{% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Valuable Assessment -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Value Assessment</h2>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600 dark:text-gray-400">Valuable</span>
+                        <span>
+                            {% if video.is_valuable == true %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                                <i class="fas fa-check mr-1"></i> Yes
+                            </span>
+                            {% elif video.is_valuable == false %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-sm font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">
+                                <i class="fas fa-times mr-1"></i> No
+                            </span>
+                            {% else %}
+                            <span class="text-gray-500 dark:text-gray-400">Not rated</span>
+                            {% endif %}
+                        </span>
+                    </div>
+
+                    {% if video.valuable_score %}
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600 dark:text-gray-400">Score</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ "%.2f"|format(video.valuable_score) }}</span>
+                    </div>
+                    {% endif %}
+
+                    {% if video.valuable_reason %}
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400 text-sm">Reason</span>
+                        <p class="mt-1 text-sm text-gray-900 dark:text-white">{{ video.valuable_reason }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Metadata Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Metadata</h2>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600 dark:text-gray-400 text-sm">Language</span>
+                        <span class="text-sm text-gray-900 dark:text-white">{{ video.language or 'Unknown' }}</span>
+                    </div>
+
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600 dark:text-gray-400 text-sm">Captions</span>
+                        <span class="text-sm text-gray-900 dark:text-white">
+                            {% if video.has_captions %}
+                            <span class="text-green-600 dark:text-green-400"><i class="fas fa-check"></i></span>
+                            {% else %}
+                            <span class="text-gray-400"><i class="fas fa-times"></i></span>
+                            {% endif %}
+                        </span>
+                    </div>
+
+                    {% if video.caption_languages and video.caption_languages|length > 0 %}
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400 text-sm">Caption Languages</span>
+                        <div class="mt-1 flex flex-wrap gap-1">
+                            {% for lang in video.caption_languages %}
+                            <span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">{{ lang }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if video.tags and video.tags|length > 0 %}
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400 text-sm">Tags</span>
+                        <div class="mt-1 flex flex-wrap gap-1">
+                            {% for tag in video.tags[:10] %}
+                            <span class="px-2 py-0.5 bg-primary-100 dark:bg-primary-900/50 text-primary-800 dark:text-primary-300 rounded text-xs">{{ tag }}</span>
+                            {% endfor %}
+                            {% if video.tags|length > 10 %}
+                            <span class="text-xs text-gray-500">+{{ video.tags|length - 10 }} more</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <a href="{{ video.youtube_url }}" target="_blank"
+                   class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                    <i class="fab fa-youtube mr-2"></i>
+                    Watch on YouTube
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

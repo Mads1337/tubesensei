@@ -73,14 +73,18 @@
                 <div class="flex items-start justify-between mb-4">
                     <div class="flex items-center">
                         {% if channel.thumbnail_url %}
-                        <img 
-                            src="{{ channel.thumbnail_url }}" 
+                        <img
+                            src="{{ channel.thumbnail_url }}"
                             alt="{{ channel.name }}"
-                            class="w-12 h-12 rounded-full mr-3"
+                            class="w-12 h-12 rounded-full mr-3 object-cover"
+                            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
                         >
+                        <div class="w-12 h-12 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center mr-3 text-primary-600 dark:text-primary-400 font-bold text-lg" style="display: none;">
+                            {{ channel.name[0]|upper if channel.name else '?' }}
+                        </div>
                         {% else %}
-                        <div class="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center mr-3">
-                            <i class="fas fa-tv text-gray-400"></i>
+                        <div class="w-12 h-12 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center mr-3 text-primary-600 dark:text-primary-400 font-bold text-lg">
+                            {{ channel.name[0]|upper if channel.name else '?' }}
                         </div>
                         {% endif %}
                         <div>
@@ -105,36 +109,57 @@
                     <div>
                         <span class="font-medium">Subscribers:</span>
                         {% if channel.subscriber_count %}
-                            {{ "{:,}".format(channel.subscriber_count) }}
+                            {% if channel.subscriber_count >= 1000000 %}
+                                {{ "%.1fM"|format(channel.subscriber_count / 1000000) }}
+                            {% elif channel.subscriber_count >= 1000 %}
+                                {{ "%.1fK"|format(channel.subscriber_count / 1000) }}
+                            {% else %}
+                                {{ channel.subscriber_count }}
+                            {% endif %}
                         {% else %}
                             N/A
                         {% endif %}
                     </div>
                     <div>
                         <span class="font-medium">Videos:</span>
-                        {% if channel.video_count %}
-                            {{ channel.video_count }}
+                        {% if channel.stats and channel.stats.total_videos %}
+                            <span class="text-green-600 dark:text-green-400">{{ channel.stats.processed_videos }}</span>/{{ channel.stats.total_videos }}
+                        {% elif channel.video_count %}
+                            {{ channel.video_count }} (YT)
                         {% else %}
                             0
                         {% endif %}
                     </div>
                     <div>
                         <span class="font-medium">Ideas:</span>
-                        {% if channel.ideas_count %}
-                            {{ channel.ideas_count }}
+                        {% if channel.stats and channel.stats.total_ideas %}
+                            {{ channel.stats.total_ideas }}
                         {% else %}
                             0
                         {% endif %}
                     </div>
                     <div>
                         <span class="font-medium">Last Sync:</span>
-                        {% if channel.last_sync_at %}
-                            {{ channel.last_sync_at.strftime('%m/%d') }}
+                        {% if channel.last_checked_at %}
+                            {{ channel.last_checked_at.strftime('%m/%d %H:%M') }}
                         {% else %}
                             Never
                         {% endif %}
                     </div>
                 </div>
+
+                <!-- Processing Status -->
+                {% if channel.stats and channel.stats.processing_videos > 0 %}
+                <div class="mb-3 px-2 py-1 bg-blue-50 dark:bg-blue-900/30 rounded text-xs text-blue-700 dark:text-blue-300">
+                    <i class="fas fa-spinner fa-spin mr-1"></i>
+                    {{ channel.stats.processing_videos }} video(s) processing...
+                </div>
+                {% elif channel.stats and channel.stats.failed_videos > 0 %}
+                <div class="mb-3 px-2 py-1 bg-red-50 dark:bg-red-900/30 rounded text-xs text-red-700 dark:text-red-300">
+                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                    {{ channel.stats.failed_videos }} video(s) failed
+                </div>
+                {% endif %}
 
                 <!-- Actions -->
                 <div class="flex space-x-2">
