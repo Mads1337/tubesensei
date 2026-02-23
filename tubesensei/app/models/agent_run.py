@@ -23,6 +23,7 @@ class AgentType(enum.Enum):
     TOPIC_FILTER = "topic_filter"         # AI-based relevance filtering
     TRANSCRIPTION = "transcription"       # Bulk transcription of discovered videos
     SIMILAR_VIDEOS = "similar_videos"     # Related videos discovery
+    IDEA_EXTRACTION = "idea_extraction"   # Extract business ideas from transcripts
 
 
 class AgentRunStatus(enum.Enum):

@@ -442,18 +442,23 @@ class TopicDiscoveryService:
         for cv, video in recent_result.all():
             # Get word count from transcript if available
             word_count = None
-            if cv.transcript_extracted and video.transcript_id:
+            if cv.transcript_extracted:
                 from app.models.transcript import Transcript
                 transcript_result = await self.db.execute(
-                    select(Transcript).where(Transcript.id == video.transcript_id)
+                    select(Transcript)
+                    .where(Transcript.video_id == video.id)
+                    .order_by(Transcript.created_at.desc())
+                    .limit(1)
                 )
                 transcript = transcript_result.scalar_one_or_none()
-                if transcript and transcript.full_text:
-                    word_count = len(transcript.full_text.split())
+                if transcript:
+                    word_count = transcript.word_count or (
+                        len(transcript.content.split()) if transcript.content else None
+                    )
 
             recent_videos.append({
                 "video_id": str(video.id),
-                "youtube_id": video.youtube_id,
+                "youtube_id": video.youtube_video_id,
                 "title": video.title,
                 "extracted_at": cv.transcript_extracted_at.isoformat() if cv.transcript_extracted_at else None,
                 "success": cv.transcript_extracted,
@@ -959,3 +964,161 @@ class TopicDiscoveryService:
 
         else:
             raise ValueError(f"Unsupported format: {format}")
+
+    # Idea extraction
+
+    async def run_idea_extraction(
+        self,
+        campaign_id: UUID,
+        event_callback: Optional[callable] = None,
+    ) -> TopicCampaign:
+        """
+        Run the idea extraction agent for a campaign synchronously.
+        """
+        from app.agents.idea_extraction_agent import IdeaExtractionAgent
+        from app.ai.llm_manager import LLMManager as _LLMManager
+
+        campaign = await self.get_campaign(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        # Set stage
+        if not campaign.campaign_metadata:
+            campaign.campaign_metadata = {}
+        campaign.campaign_metadata["stage"] = "idea_extraction"
+
+        if campaign.status != CampaignStatus.RUNNING:
+            campaign.status = CampaignStatus.RUNNING
+            await self.db.commit()
+
+        context = AgentContext(
+            campaign_id=campaign_id,
+            campaign=campaign,
+            db=self.db,
+            config=campaign.config or {},
+            youtube_rate_limiter=RateLimiter(requests_per_minute=120),
+            llm_rate_limiter=RateLimiter(requests_per_minute=60),
+            event_callback=event_callback,
+        )
+
+        llm_manager = _LLMManager()
+        agent = IdeaExtractionAgent(context, llm_manager=llm_manager)
+
+        logger.info(f"Starting idea extraction for campaign {campaign_id}")
+
+        result = await agent.execute({"batch_size": 5})
+
+        if result.success:
+            campaign.status = CampaignStatus.COMPLETED
+            await self.db.commit()
+
+        return campaign
+
+    async def get_ideas_stats(self, campaign_id: UUID) -> Dict[str, Any]:
+        """
+        Get idea extraction statistics for a campaign.
+
+        Returns:
+            Dict with ideas stats including totals by category, average confidence, etc.
+        """
+        from sqlalchemy import case
+        from app.models.idea import Idea, IdeaStatus
+
+        campaign = await self.get_campaign(campaign_id)
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        # Count videos with/without ideas
+        ideas_stats_result = await self.db.execute(
+            select(
+                func.count(CampaignVideo.id).label('total_with_transcripts'),
+                func.count(case((CampaignVideo.ideas_extracted == True, 1))).label('ideas_extracted'),
+                func.count(case((
+                    (CampaignVideo.transcript_extracted == True) &
+                    (CampaignVideo.ideas_extracted == False), 1
+                ))).label('pending'),
+            )
+            .where(
+                CampaignVideo.campaign_id == campaign_id,
+                CampaignVideo.is_topic_relevant == True,
+                CampaignVideo.transcript_extracted == True,
+            )
+        )
+        row = ideas_stats_result.first()
+
+        total_with_transcripts = row.total_with_transcripts if row else 0
+        ideas_extracted_count = row.ideas_extracted if row else 0
+        pending = row.pending if row else 0
+
+        # Get idea totals - join through Video → CampaignVideo
+        ideas_count_result = await self.db.execute(
+            select(func.count(Idea.id))
+            .join(Video, Idea.video_id == Video.id)
+            .join(CampaignVideo, CampaignVideo.video_id == Video.id)
+            .where(CampaignVideo.campaign_id == campaign_id)
+        )
+        total_ideas = ideas_count_result.scalar() or 0
+
+        # Get ideas by category
+        category_result = await self.db.execute(
+            select(Idea.category, func.count(Idea.id).label('count'))
+            .join(Video, Idea.video_id == Video.id)
+            .join(CampaignVideo, CampaignVideo.video_id == Video.id)
+            .where(CampaignVideo.campaign_id == campaign_id)
+            .group_by(Idea.category)
+            .order_by(desc(func.count(Idea.id)))
+        )
+        categories = {r.category or "Uncategorized": r.count for r in category_result.all()}
+
+        # Get average confidence
+        avg_confidence_result = await self.db.execute(
+            select(func.avg(Idea.confidence_score))
+            .join(Video, Idea.video_id == Video.id)
+            .join(CampaignVideo, CampaignVideo.video_id == Video.id)
+            .where(CampaignVideo.campaign_id == campaign_id)
+        )
+        avg_confidence = avg_confidence_result.scalar() or 0
+
+        # Get recent ideas (last 20)
+        recent_result = await self.db.execute(
+            select(Idea, Video)
+            .join(Video, Idea.video_id == Video.id)
+            .join(CampaignVideo, CampaignVideo.video_id == Video.id)
+            .where(CampaignVideo.campaign_id == campaign_id)
+            .order_by(desc(Idea.created_at))
+            .limit(20)
+        )
+
+        recent_ideas = []
+        for idea, video in recent_result.all():
+            recent_ideas.append({
+                "id": str(idea.id),
+                "title": idea.title,
+                "description": idea.description[:200] if idea.description else "",
+                "category": idea.category or "Uncategorized",
+                "confidence_score": idea.confidence_score,
+                "status": idea.status.value,
+                "video_id": str(video.id),
+                "video_title": video.title,
+                "youtube_video_id": video.youtube_video_id,
+                "created_at": idea.created_at.isoformat() if idea.created_at else None,
+            })
+
+        progress_percent = (ideas_extracted_count / total_with_transcripts * 100) if total_with_transcripts > 0 else 0
+
+        return {
+            "campaign_id": str(campaign_id),
+            "total_with_transcripts": total_with_transcripts,
+            "videos_processed": ideas_extracted_count,
+            "pending": pending,
+            "total_ideas": total_ideas,
+            "categories": categories,
+            "avg_confidence": round(float(avg_confidence), 3),
+            "progress_percent": progress_percent,
+            "recent_ideas": recent_ideas,
+            "is_active": (
+                campaign.status == CampaignStatus.RUNNING and
+                campaign.campaign_metadata is not None and
+                campaign.campaign_metadata.get("stage") == "idea_extraction"
+            ),
+        }

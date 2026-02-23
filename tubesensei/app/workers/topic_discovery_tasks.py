@@ -781,7 +781,10 @@ def process_campaign_transcripts_task(
 
 
 @celery_app.task(
+    base=TopicDiscoveryTask,
     bind=True,
+    max_retries=3,
+    default_retry_delay=120,
     name="app.workers.topic_discovery_tasks.extract_campaign_ideas"
 )
 def extract_campaign_ideas_task(
@@ -789,62 +792,99 @@ def extract_campaign_ideas_task(
     campaign_id: str,
 ) -> Dict[str, Any]:
     """
-    Queue idea extraction for all videos with transcripts in a campaign.
+    Run idea extraction for all videos with transcripts in a campaign.
+
+    Uses the IdeaExtractionAgent to process videos in batches,
+    calling the LLM for each transcript and saving extracted ideas.
 
     Args:
         campaign_id: Campaign ID
 
     Returns:
-        Dictionary with queued job info
+        Dictionary with extraction results
     """
+    start_time = datetime.now(timezone.utc)
+    TaskMonitor.record_task_start(self.name)
+
     try:
         campaign_uuid = UUID(campaign_id)
 
-        async def _get_videos_with_transcripts():
-            async with AsyncSessionLocal() as session:
-                from sqlalchemy import select
+        async def _run():
+            from app.agents.idea_extraction_agent import IdeaExtractionAgent
 
-                # Get videos that are relevant and have transcripts but no ideas extracted
-                result = await session.execute(
-                    select(CampaignVideo.video_id).where(
-                        CampaignVideo.campaign_id == campaign_uuid,
-                        CampaignVideo.is_topic_relevant == True,
-                        CampaignVideo.transcript_extracted == True,
-                        CampaignVideo.ideas_extracted == False,
+            WorkerSession, worker_engine = create_worker_session_factory()
+            try:
+                async with WorkerSession() as session:
+                    campaign = await session.get(TopicCampaign, campaign_uuid)
+                    if not campaign:
+                        raise ValueError(f"Campaign not found: {campaign_id}")
+
+                    # Set stage to idea_extraction
+                    if not campaign.campaign_metadata:
+                        campaign.campaign_metadata = {}
+                    campaign.campaign_metadata["stage"] = "idea_extraction"
+
+                    if campaign.status != CampaignStatus.RUNNING:
+                        campaign.status = CampaignStatus.RUNNING
+                    await session.commit()
+
+                    # Create agent context
+                    handler = create_progress_handler(self.request.id, campaign_id)
+
+                    context = AgentContext(
+                        campaign_id=campaign_uuid,
+                        campaign=campaign,
+                        db=session,
+                        config=campaign.config or {},
+                        youtube_rate_limiter=RateLimiter(requests_per_minute=120),
+                        llm_rate_limiter=RateLimiter(requests_per_minute=60),
+                        event_callback=handler,
                     )
-                )
-                return [str(row[0]) for row in result.all()]
+
+                    llm_manager = LLMManager()
+                    agent = IdeaExtractionAgent(context, llm_manager=llm_manager)
+
+                    logger.info(f"Starting idea extraction for campaign {campaign_id}")
+
+                    result = await agent.execute({
+                        "batch_size": 5,
+                    })
+
+                    # Mark campaign completed
+                    if result.success:
+                        campaign.status = CampaignStatus.COMPLETED
+                        await session.commit()
+
+                    return {
+                        "success": result.success,
+                        "campaign_id": campaign_id,
+                        "processed_count": result.data.get("processed_count", 0),
+                        "total_ideas": result.data.get("total_ideas", 0),
+                        "duration": result.duration_seconds,
+                        "errors": result.errors,
+                    }
+            finally:
+                await worker_engine.dispose()
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            video_ids = loop.run_until_complete(_get_videos_with_transcripts())
+            result = loop.run_until_complete(_run())
         finally:
             loop.close()
 
-        # Queue idea extraction tasks
-        # Note: Import here to avoid circular imports
-        from app.workers.processing_tasks import extract_transcript_task
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
-        queued = 0
-        for video_id in video_ids:
-            # TODO: Replace with actual idea extraction task when available
-            # For now, we'll just log and count - the actual task should be
-            # something like: extract_ideas_task.delay(video_id)
-            queued += 1
+        # Publish completion
+        publish_campaign_progress(campaign_id, {
+            "type": "campaign_completed",
+            "message": f"Idea extraction completed: {result.get('total_ideas', 0)} ideas found",
+            "status": "completed",
+            "stats": {"duration": duration, "total_ideas": result.get("total_ideas", 0)},
+        })
 
-        logger.info(f"Queued {queued} idea extraction tasks for campaign {campaign_id}")
-
-        return {
-            "success": True,
-            "campaign_id": campaign_id,
-            "videos_queued": queued,
-        }
+        return result
 
     except Exception as e:
-        logger.exception(f"Failed to queue idea extraction: {e}")
-        return {
-            "success": False,
-            "campaign_id": campaign_id,
-            "error": str(e),
-        }
+        logger.exception(f"Idea extraction campaign task failed: {e}")
+        raise self.retry(exc=e)

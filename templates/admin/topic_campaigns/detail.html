@@ -263,6 +263,12 @@
                     <i class="fas fa-file-alt mr-2"></i>
                     Transcription
                 </button>
+                <button @click="activeTab = 'ideas'"
+                    :class="activeTab === 'ideas' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                    <i class="fas fa-lightbulb mr-2"></i>
+                    Ideas
+                </button>
             </nav>
         </div>
 
@@ -431,6 +437,24 @@
                             <div class="h-20 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
                         </div>
                         <div class="h-16 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                        <div class="h-48 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ideas Tab -->
+            <div x-show="activeTab === 'ideas'" class="w-full">
+                <div id="ideas-container"
+                     hx-get="/admin/topic-campaigns/{{ campaign.id }}/ideas"
+                     hx-trigger="load delay:300ms"
+                     hx-swap="innerHTML">
+                    <div class="animate-pulse space-y-4">
+                        <div class="grid grid-cols-4 gap-4">
+                            <div class="h-20 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                            <div class="h-20 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                            <div class="h-20 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                            <div class="h-20 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
+                        </div>
                         <div class="h-48 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
                     </div>
                 </div>
@@ -870,6 +894,21 @@
             }
         } catch (e) {
             showToast('Failed to retry transcription', 'error');
+        }
+    }
+
+    async function extractIdeas(id) {
+        try {
+            const response = await fetch(`/api/v1/topic-campaigns/${id}/extract-ideas`, { method: 'POST' });
+            if (response.ok) {
+                showToast('Idea extraction started!', 'success');
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                const error = await response.json();
+                showToast(error.detail || 'Failed to start idea extraction', 'error');
+            }
+        } catch (e) {
+            showToast('Failed to start idea extraction', 'error');
         }
     }
 

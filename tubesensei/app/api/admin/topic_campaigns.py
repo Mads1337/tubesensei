@@ -461,6 +461,49 @@ async def get_stale_status(
     )
 
 
+@router.get("/{campaign_id}/ideas", response_class=HTMLResponse)
+async def get_ideas_tab(
+    request: Request,
+    campaign_id: UUID,
+    user = Depends(get_current_user),
+    service: TopicDiscoveryService = Depends(get_topic_discovery_service),
+):
+    """
+    Get the ideas extraction tab partial.
+
+    Returns an HTML partial with idea extraction stats, controls, and idea list.
+    """
+    campaign = await service.get_campaign(campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    try:
+        stats = await service.get_ideas_stats(campaign_id)
+    except Exception as e:
+        logger.error(f"Error getting ideas stats for {campaign_id}: {e}")
+        stats = {
+            "total_with_transcripts": 0,
+            "videos_processed": 0,
+            "pending": 0,
+            "total_ideas": 0,
+            "categories": {},
+            "avg_confidence": 0,
+            "progress_percent": 0,
+            "recent_ideas": [],
+            "is_active": False,
+        }
+
+    return templates.TemplateResponse(
+        "admin/topic_campaigns/partials/ideas_tab.html",
+        {
+            "request": request,
+            "campaign": campaign,
+            "campaign_id": str(campaign_id),
+            "stats": stats,
+        }
+    )
+
+
 @router.get("/{campaign_id}/transcription", response_class=HTMLResponse)
 async def get_transcription_tab(
     request: Request,

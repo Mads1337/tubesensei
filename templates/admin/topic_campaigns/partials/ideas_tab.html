@@ -1,0 +1,136 @@
+<!-- Ideas Extraction Tab Partial -->
+<div class="space-y-6">
+
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="text-center p-4 bg-yellow-50 dark:bg-yellow-900/30 rounded-lg border border-yellow-200 dark:border-yellow-700">
+            <div class="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{{ stats.total_ideas }}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Total Ideas</div>
+        </div>
+        <div class="text-center p-4 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-200 dark:border-green-700">
+            <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ stats.videos_processed }}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Videos Processed</div>
+        </div>
+        <div class="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div class="text-2xl font-bold text-gray-600 dark:text-gray-400">{{ stats.pending }}</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Pending</div>
+        </div>
+        <div class="text-center p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
+            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ "%.0f"|format(stats.avg_confidence * 100) }}%</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Avg Confidence</div>
+        </div>
+    </div>
+
+    <!-- Progress Bar -->
+    {% if stats.total_with_transcripts > 0 %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+        <div class="flex justify-between mb-2">
+            <span class="text-sm text-gray-600 dark:text-gray-400">Extraction Progress</span>
+            <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ "%.1f"|format(stats.progress_percent) }}%</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+            <div class="bg-yellow-500 h-3 rounded-full transition-all duration-500"
+                 style="width: {{ stats.progress_percent }}%"></div>
+        </div>
+        <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            {{ stats.videos_processed }} of {{ stats.total_with_transcripts }} videos processed
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Control Buttons -->
+    <div class="flex flex-wrap gap-3">
+        {% if stats.pending > 0 and not stats.is_active %}
+        <button onclick="extractIdeas('{{ campaign_id }}')"
+                class="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors">
+            <i class="fas fa-lightbulb mr-2"></i> Extract Ideas
+        </button>
+        {% endif %}
+
+        {% if stats.is_active %}
+        <span class="inline-flex items-center px-4 py-2 text-sm text-yellow-700 dark:text-yellow-300">
+            <span class="w-2 h-2 mr-2 bg-yellow-400 rounded-full animate-pulse"></span>
+            Extraction in progress...
+        </span>
+        {% endif %}
+
+        <button onclick="htmx.ajax('GET', '/admin/topic-campaigns/{{ campaign_id }}/ideas', '#ideas-container')"
+                class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+            <i class="fas fa-sync-alt mr-2"></i> Refresh
+        </button>
+    </div>
+
+    <!-- Categories Breakdown -->
+    {% if stats.categories %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            <i class="fas fa-tags mr-2"></i>Ideas by Category
+        </h4>
+        <div class="flex flex-wrap gap-2">
+            {% for category, count in stats.categories.items() %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">
+                {{ category }} <span class="ml-1.5 bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-200 rounded-full px-2 py-0.5 text-xs">{{ count }}</span>
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Ideas List -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                <i class="fas fa-list mr-2"></i>Extracted Ideas
+            </h4>
+        </div>
+
+        {% if stats.recent_ideas %}
+        <div class="divide-y divide-gray-100 dark:divide-gray-700">
+            {% for idea in stats.recent_ideas %}
+            <div class="px-4 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1 min-w-0">
+                        <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {{ idea.title }}
+                        </h5>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+                            {{ idea.description }}
+                        </p>
+                        <div class="mt-2 flex items-center space-x-3 text-xs">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                                {{ idea.category }}
+                            </span>
+                            <span class="text-gray-400">
+                                <i class="fas fa-video mr-1"></i>
+                                <a href="https://www.youtube.com/watch?v={{ idea.youtube_video_id }}"
+                                   target="_blank"
+                                   class="hover:text-primary-600 hover:underline"
+                                   title="{{ idea.video_title }}">
+                                    {{ idea.video_title[:40] }}{% if idea.video_title|length > 40 %}...{% endif %}
+                                </a>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="flex-shrink-0 ml-4 text-right">
+                        <div class="text-sm font-medium {% if idea.confidence_score >= 0.7 %}text-green-600 dark:text-green-400{% elif idea.confidence_score >= 0.4 %}text-yellow-600 dark:text-yellow-400{% else %}text-gray-500{% endif %}">
+                            {{ "%.0f"|format(idea.confidence_score * 100) }}%
+                        </div>
+                        <div class="text-xs text-gray-400">confidence</div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
+            <i class="fas fa-lightbulb text-4xl mb-3 text-gray-300 dark:text-gray-600"></i>
+            <p class="text-sm">No ideas extracted yet</p>
+            {% if stats.total_with_transcripts > 0 %}
+            <p class="mt-1 text-xs">Click "Extract Ideas" to analyze transcripts for business ideas</p>
+            {% else %}
+            <p class="mt-1 text-xs">Extract transcripts first, then run idea extraction</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
