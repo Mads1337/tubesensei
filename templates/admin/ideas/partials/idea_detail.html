@@ -1,0 +1,150 @@
+<!-- Idea Detail Partial (loaded via HTMX) -->
+<div class="space-y-4">
+    <!-- Full Description -->
+    <div>
+        <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Description</h5>
+        <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{{ idea.description }}</p>
+    </div>
+
+    <!-- Key Details Grid -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {% if idea.target_audience %}
+        <div>
+            <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Target Audience</h5>
+            <p class="text-sm text-gray-700 dark:text-gray-300">{{ idea.target_audience }}</p>
+        </div>
+        {% endif %}
+
+        {% if idea.market_size_estimate %}
+        <div>
+            <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Market Size</h5>
+            <p class="text-sm text-gray-700 dark:text-gray-300">{{ idea.market_size_estimate }}</p>
+        </div>
+        {% endif %}
+
+        {% if idea.complexity_score is not none %}
+        <div>
+            <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Complexity</h5>
+            <div class="flex items-center gap-1">
+                {% for i in range(10) %}
+                <div class="w-2 h-4 rounded-sm {% if i < idea.complexity_score %}bg-primary-500{% else %}bg-gray-200 dark:bg-gray-600{% endif %}"></div>
+                {% endfor %}
+                <span class="text-xs text-gray-500 ml-1">{{ idea.complexity_score }}/10</span>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if idea.implementation_time_estimate %}
+        <div>
+            <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Est. Time</h5>
+            <p class="text-sm text-gray-700 dark:text-gray-300">{{ idea.implementation_time_estimate }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Technologies -->
+    {% if idea.technologies %}
+    <div>
+        <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Technologies</h5>
+        <div class="flex flex-wrap gap-1">
+            {% for tech in idea.technologies %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                {{ tech }}
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tags -->
+    {% if idea.tags %}
+    <div>
+        <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Tags</h5>
+        <div class="flex flex-wrap gap-1">
+            {% for tag in idea.tags %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300">
+                {{ tag }}
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Competitive Advantage -->
+    {% if idea.competitive_advantage %}
+    <div>
+        <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Competitive Advantage</h5>
+        <p class="text-sm text-gray-700 dark:text-gray-300">{{ idea.competitive_advantage }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Challenges -->
+    {% if idea.potential_challenges %}
+    <div>
+        <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Potential Challenges</h5>
+        <ul class="list-disc list-inside text-sm text-gray-700 dark:text-gray-300 space-y-1">
+            {% for challenge in idea.potential_challenges %}
+            <li>{{ challenge }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Monetization Strategies -->
+    {% if idea.monetization_strategies %}
+    <div>
+        <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Monetization Strategies</h5>
+        <ul class="list-disc list-inside text-sm text-gray-700 dark:text-gray-300 space-y-1">
+            {% for strategy in idea.monetization_strategies %}
+            <li>{{ strategy }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Source Context -->
+    {% if idea.source_context %}
+    <div>
+        <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Source Context</h5>
+        <p class="text-sm text-gray-600 dark:text-gray-400 italic bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
+            "{{ idea.source_context }}"
+        </p>
+    </div>
+    {% endif %}
+
+    <!-- Transcript Excerpt -->
+    {% if transcript_excerpt %}
+    <div>
+        <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Transcript Excerpt</h5>
+        <p class="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg max-h-32 overflow-y-auto">
+            {{ transcript_excerpt }}
+        </p>
+    </div>
+    {% endif %}
+
+    <!-- Source Video -->
+    {% if video %}
+    <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+        <i class="fab fa-youtube text-red-500 text-lg"></i>
+        <div class="flex-1 min-w-0">
+            <a href="{{ video.url }}" target="_blank"
+               class="text-sm font-medium text-gray-900 dark:text-white hover:text-primary-600 dark:hover:text-primary-400">
+                {{ video.title }}
+            </a>
+            <div class="text-xs text-gray-500 dark:text-gray-400">
+                {{ channel.name if channel else 'Unknown channel' }}
+                {% if video.views %}
+                &middot; {{ video.views }} views
+                {% endif %}
+                {% if video.published_at %}
+                &middot; {{ video.published_at }}
+                {% endif %}
+            </div>
+        </div>
+        <a href="{{ video.url }}" target="_blank"
+           class="text-xs text-primary-600 hover:text-primary-500 dark:text-primary-400 whitespace-nowrap">
+            Watch <i class="fas fa-external-link-alt ml-1"></i>
+        </a>
+    </div>
+    {% endif %}
+</div>

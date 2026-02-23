@@ -1098,6 +1098,8 @@ class TopicDiscoveryService:
                 "category": idea.category or "Uncategorized",
                 "confidence_score": idea.confidence_score,
                 "status": idea.status.value,
+                "priority": idea.priority.value if idea.priority else None,
+                "tags": idea.tags or [],
                 "video_id": str(video.id),
                 "video_title": video.title,
                 "youtube_video_id": video.youtube_video_id,

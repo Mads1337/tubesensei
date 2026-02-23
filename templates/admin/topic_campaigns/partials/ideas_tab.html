@@ -87,35 +87,70 @@
         {% if stats.recent_ideas %}
         <div class="divide-y divide-gray-100 dark:divide-gray-700">
             {% for idea in stats.recent_ideas %}
-            <div class="px-4 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                <div class="flex items-start justify-between">
-                    <div class="flex-1 min-w-0">
-                        <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {{ idea.title }}
-                        </h5>
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
-                            {{ idea.description }}
-                        </p>
-                        <div class="mt-2 flex items-center space-x-3 text-xs">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                                {{ idea.category }}
-                            </span>
-                            <span class="text-gray-400">
-                                <i class="fas fa-video mr-1"></i>
-                                <a href="https://www.youtube.com/watch?v={{ idea.youtube_video_id }}"
-                                   target="_blank"
-                                   class="hover:text-primary-600 hover:underline"
-                                   title="{{ idea.video_title }}">
-                                    {{ idea.video_title[:40] }}{% if idea.video_title|length > 40 %}...{% endif %}
-                                </a>
-                            </span>
+            <div class="px-4 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                 x-data="{ expanded: false, loaded: false, loading: false }">
+                <div class="cursor-pointer"
+                     @click="expanded = !expanded; if (expanded && !loaded) { loading = true; htmx.ajax('GET', '/admin/ideas/{{ idea.id }}', { target: '#campaign-idea-detail-{{ idea.id }}', swap: 'innerHTML' }).then(() => { loaded = true; loading = false; }); }">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-chevron-right text-gray-400 text-xs transition-transform duration-200"
+                                   :class="{ 'rotate-90': expanded }"></i>
+                                <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                    {{ idea.title }}
+                                </h5>
+                            </div>
+                            <p class="mt-1 ml-5 text-xs text-gray-500 dark:text-gray-400 line-clamp-2" x-show="!expanded">
+                                {{ idea.description }}
+                            </p>
+                            <div class="mt-2 ml-5 flex items-center space-x-3 text-xs">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                                    {{ idea.category }}
+                                </span>
+                                {% if idea.priority %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                                           {% if idea.priority == 'critical' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300
+                                           {% elif idea.priority == 'high' %}bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300
+                                           {% elif idea.priority == 'medium' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300
+                                           {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300{% endif %}">
+                                    <i class="fas fa-flag mr-1"></i>{{ idea.priority | title }}
+                                </span>
+                                {% endif %}
+                                {% if idea.tags %}
+                                {% for tag in idea.tags[:3] %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300">
+                                    {{ tag }}
+                                </span>
+                                {% endfor %}
+                                {% endif %}
+                                <span class="text-gray-400" @click.stop>
+                                    <i class="fas fa-video mr-1"></i>
+                                    <a href="https://www.youtube.com/watch?v={{ idea.youtube_video_id }}"
+                                       target="_blank"
+                                       class="hover:text-primary-600 hover:underline"
+                                       title="{{ idea.video_title }}">
+                                        {{ idea.video_title[:40] }}{% if idea.video_title|length > 40 %}...{% endif %}
+                                    </a>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex-shrink-0 ml-4 text-right">
+                            <div class="text-sm font-medium {% if idea.confidence_score >= 0.7 %}text-green-600 dark:text-green-400{% elif idea.confidence_score >= 0.4 %}text-yellow-600 dark:text-yellow-400{% else %}text-gray-500{% endif %}">
+                                {{ "%.0f"|format(idea.confidence_score * 100) }}%
+                            </div>
+                            <div class="text-xs text-gray-400">confidence</div>
                         </div>
                     </div>
-                    <div class="flex-shrink-0 ml-4 text-right">
-                        <div class="text-sm font-medium {% if idea.confidence_score >= 0.7 %}text-green-600 dark:text-green-400{% elif idea.confidence_score >= 0.4 %}text-yellow-600 dark:text-yellow-400{% else %}text-gray-500{% endif %}">
-                            {{ "%.0f"|format(idea.confidence_score * 100) }}%
+                </div>
+
+                <!-- Expanded Detail (HTMX loaded) -->
+                <div x-show="expanded" x-transition>
+                    <div class="mt-3 ml-5 pt-3 border-t border-gray-200 dark:border-gray-600">
+                        <div x-show="loading" class="flex items-center justify-center py-4">
+                            <i class="fas fa-spinner fa-spin text-gray-400 mr-2"></i>
+                            <span class="text-sm text-gray-500">Loading details...</span>
                         </div>
-                        <div class="text-xs text-gray-400">confidence</div>
+                        <div id="campaign-idea-detail-{{ idea.id }}"></div>
                     </div>
                 </div>
             </div>

@@ -13,6 +13,7 @@ from .jobs import router as jobs_router
 from .transcripts import router as transcripts_router
 from .settings import router as settings_router
 from .monitoring import router as monitoring_router
+from .ideas import router as ideas_router
 from .template_helpers import get_template_context
 
 # Set up templates
@@ -27,11 +28,6 @@ async def admin_dashboard(request: Request):
     """Main admin dashboard - redirect to channels for now"""
     return RedirectResponse(url="/admin/channels/", status_code=302)
 
-@router.get("/ideas", response_class=HTMLResponse)
-async def admin_ideas(request: Request):
-    """Ideas page - redirect to channels for now"""
-    return RedirectResponse(url="/admin/channels/", status_code=302)
-
 # Include sub-routers
 # router.include_router(dashboard_router)  # Temporarily disabled
 router.include_router(channels_router)
@@ -41,3 +37,4 @@ router.include_router(jobs_router)
 router.include_router(transcripts_router)
 router.include_router(settings_router)
 router.include_router(monitoring_router)
+router.include_router(ideas_router)

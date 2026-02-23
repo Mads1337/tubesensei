@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from datetime import datetime
@@ -95,11 +95,13 @@ class IdeaService:
             "has_more": (offset + limit) < total
         }
     
-    async def get_idea(self, idea_id: str) -> Idea:
+    async def get_idea(self, idea_id: Union[str, UUID]) -> Idea:
         """Get idea by ID"""
+        if isinstance(idea_id, str):
+            idea_id = UUID(idea_id)
         idea = await self.db.get(Idea, idea_id)
         if not idea:
-            raise NotFoundException("Idea", idea_id)
+            raise NotFoundException("Idea", str(idea_id))
         return idea
     
     async def create_idea(self, data: Dict[str, Any]) -> Idea:
@@ -214,34 +216,36 @@ class IdeaService:
         )
         return [row[0] for row in result]
     
-    async def get_idea_context(self, idea_id: str) -> Dict[str, Any]:
+    async def get_idea_context(self, idea_id: Union[str, UUID]) -> Dict[str, Any]:
         """Get full context for an idea"""
         idea = await self.get_idea(idea_id)
-        video = await self.db.get(Video, idea.video_id)
-        channel = await self.db.get(Channel, video.channel_id)
-        
+        video = await self.db.get(Video, idea.video_id) if idea.video_id else None
+        channel = await self.db.get(Channel, video.channel_id) if video and video.channel_id else None
+
         # Get transcript excerpt if available
-        transcript_result = await self.db.execute(
-            select(Transcript).where(Transcript.video_id == video.id)
-        )
-        transcript = transcript_result.scalar_one_or_none()
-        
+        transcript = None
+        if video:
+            transcript_result = await self.db.execute(
+                select(Transcript).where(Transcript.video_id == video.id)
+            )
+            transcript = transcript_result.scalar_one_or_none()
+
         return {
             "idea": idea.to_dict(),
             "video": {
-                "id": str(video.id),
-                "title": video.title,
-                "description": video.description,
-                "url": video.youtube_url,
-                "published_at": video.published_at.isoformat(),
-                "duration": video.duration_seconds,
-                "views": video.view_count
-            },
+                "id": str(video.id) if video else None,
+                "title": video.title if video else "Unknown",
+                "description": video.description if video else None,
+                "url": video.youtube_url if video else None,
+                "published_at": video.published_at.isoformat() if video and video.published_at else None,
+                "duration": video.duration_seconds if video else None,
+                "views": video.view_count if video else None
+            } if video else None,
             "channel": {
-                "id": str(channel.id),
-                "name": channel.name,
-                "url": channel.channel_url
-            },
+                "id": str(channel.id) if channel else None,
+                "name": channel.name if channel else "Unknown",
+                "url": channel.channel_url if channel else None
+            } if channel else None,
             "transcript_excerpt": self._get_transcript_excerpt(
                 transcript,
                 idea.source_timestamp
