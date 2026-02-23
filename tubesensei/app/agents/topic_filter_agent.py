@@ -139,12 +139,15 @@ class TopicFilterAgent(BaseAgent):
                 if batch_idx < total_batches - 1:
                     await asyncio.sleep(0.5)
 
-            # Commit all changes
+            # Commit all CampaignVideo changes
             await self.db.commit()
 
             # Update campaign stats
             self.context.campaign.increment_relevant(len(relevant_ids))
             self.context.campaign.increment_filtered(len(filtered_ids))
+
+            # Commit campaign stat changes (critical for progress tracking)
+            await self.db.commit()
 
             total_processed = len(relevant_ids) + len(filtered_ids)
             acceptance_rate = (len(relevant_ids) / total_processed * 100) if total_processed > 0 else 0.0

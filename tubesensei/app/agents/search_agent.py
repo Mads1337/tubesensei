@@ -20,6 +20,7 @@ from app.models.channel import Channel, ChannelStatus
 from app.models.campaign_video import CampaignVideo, DiscoverySource
 from app.models.campaign_channel import CampaignChannel
 from app.integrations.youtube_api import YouTubeAPIClient
+from app.utils.exceptions import QuotaExceededError
 
 logger = logging.getLogger(__name__)
 
@@ -162,8 +163,21 @@ class SearchAgent(BaseAgent):
                 "new_channels_count": new_channels,
             })
 
+        except QuotaExceededError as e:
+            error_msg = "YouTube API quota exceeded. Please wait until quota resets (midnight Pacific Time) or use a different API key."
+            logger.error(f"SearchAgent failed - quota exceeded: {e}")
+            self.add_error(error_msg)
+            return self._build_result(success=False, data={
+                "video_ids": [],
+                "channel_ids": [],
+                "new_videos_count": 0,
+                "new_channels_count": 0,
+                "error": error_msg,
+                "error_type": "quota_exceeded",
+            })
         except Exception as e:
             logger.exception(f"SearchAgent failed: {e}")
+            self.add_error(str(e))
             return self._build_result(success=False, data={
                 "video_ids": [str(vid) for vid in discovered_video_ids],
                 "channel_ids": [str(cid) for cid in discovered_channel_ids],

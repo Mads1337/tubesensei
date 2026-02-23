@@ -506,10 +506,13 @@ class YouTubeAPIClient:
                 if not next_page_token:
                     break
                     
+            except QuotaExceededError:
+                # Re-raise quota errors - these are critical and should not be silently ignored
+                raise
             except Exception as e:
                 logger.error(f"Error searching videos: {e}")
                 break
-        
+
         return videos[:max_results]
 
     async def get_related_videos(

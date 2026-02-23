@@ -175,11 +175,18 @@ class CoordinatorAgent(BaseAgent):
                 logger.info("CoordinatorAgent: Stopping - limit reached or cancelled")
                 break
 
+            # Refresh campaign from database to get current stats before capturing baseline
+            await self.db.refresh(self.context.campaign)
             iteration_start_relevant = self.context.campaign.total_videos_relevant
 
             # Step 1: Search (only on first iteration)
             if self._iteration == 1:
-                await self._run_search(topic)
+                search_success = await self._run_search(topic)
+
+                # If search failed critically (e.g., quota exceeded), stop immediately
+                if not search_success:
+                    logger.error("CoordinatorAgent: Search failed with critical error, stopping campaign")
+                    raise Exception(self._errors[-1] if self._errors else "Search failed with critical error")
 
             # Step 2: Expand channels
             await self._run_channel_expansion()
@@ -189,6 +196,9 @@ class CoordinatorAgent(BaseAgent):
 
             # Step 4: Find similar videos for relevant ones
             await self._run_similar_videos()
+
+            # Refresh campaign from database to get persisted values
+            await self.db.refresh(self.context.campaign)
 
             # Check progress
             new_relevant = self.context.campaign.total_videos_relevant - iteration_start_relevant
@@ -218,10 +228,15 @@ class CoordinatorAgent(BaseAgent):
             # Commit heartbeat and checkpoint to ensure persistence
             await self.db.commit()
 
-    async def _run_search(self, topic: str) -> None:
-        """Run the search agent."""
+    async def _run_search(self, topic: str) -> bool:
+        """
+        Run the search agent.
+
+        Returns:
+            True if search succeeded, False if there was a critical failure
+        """
         if not self._search_agent:
-            return
+            return True
 
         logger.info("CoordinatorAgent: Running SearchAgent")
 
@@ -234,8 +249,21 @@ class CoordinatorAgent(BaseAgent):
             # Add discovered videos to pending filter list
             video_ids = [UUID(vid) for vid in result.data.get("video_ids", [])]
             self._videos_pending_filter.extend(video_ids)
-
             self.increment_api_calls(result.api_calls_made)
+            return True
+        else:
+            # Check for critical errors that should stop the campaign
+            error_type = result.data.get("error_type")
+            error_msg = result.data.get("error", "Unknown error")
+
+            if error_type == "quota_exceeded":
+                logger.error(f"CoordinatorAgent: Critical error - {error_msg}")
+                self.add_error(error_msg)
+                return False
+
+            # Non-critical errors - log but continue
+            logger.warning(f"CoordinatorAgent: Search failed but continuing - {error_msg}")
+            return True
 
     async def _run_channel_expansion(self) -> None:
         """Run channel expansion for unexpanded channels."""

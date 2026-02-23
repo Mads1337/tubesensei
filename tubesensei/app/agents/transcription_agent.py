@@ -99,7 +99,7 @@ class TranscriptionAgent(BaseAgent):
                 progress_percent = (completed / total_relevant) * 100
 
             await self.send_event(
-                event_type=AgentEventType.AGENT_PROGRESS,
+                event_type=AgentEventType.PROGRESS,
                 message=f"Processed {processed_count} videos ({success_count} successful)",
                 progress=progress_percent,
                 data={
@@ -156,46 +156,34 @@ class TranscriptionAgent(BaseAgent):
         
         for vid in videos:
             try:
-                # Mark as attempting (optional, but good for debugging)
-                
-                # Extract
+                # Extract transcript
                 transcript = await self.processor.extract_transcript(
                     video_id=vid.video_id,
                     force_refresh=False,
                     save_to_db=True
                 )
-                
+
                 success = transcript is not None
-                
-                # Update CampaignVideo status
-                vid.transcript_extracted = success
-                # If failed, we might want to track that so we don't retry forever.
-                # Currently CampaignVideo only has boolean.
-                # Ideally we'd have a 'transcription_status' column.
-                # For now, if it fails, we assume it won't work and leave transcript_extracted=False
-                # BUT this means we'll retry it forever in the loop.
-                # FIX: We need a way to mark failure.
-                # Since we can't change schema right now without Alebmic, 
-                # we will trust TranscriptProcessor to mark the VIDEO status as FAILED or SKIPPED
-                # If the underlying Video is Failed/Skipped, we should probably not try it again?
-                
-                # Let's check the video status.
-                # The video object is loaded lazily or we can access via vid.video_id
-                
+
+                # Always mark as attempted to prevent infinite retry loop
+                # Use helper method for success (sets timestamp), direct assignment for failure
+                if success:
+                    vid.mark_transcript_extracted()
+                else:
+                    # Mark as attempted even on failure to prevent retry
+                    # The Video.status filter in _get_pending_videos will also exclude FAILED/SKIPPED
+                    vid.transcript_extracted = True
+                    logger.warning(f"Transcript extraction failed for video {vid.video_id}, marking as attempted")
+
                 results.append({
                     "video_id": str(vid.video_id),
                     "success": success
                 })
-                
-                # If failed, we need to mark it so we don't pick it up again in _get_pending_videos
-                # But wait, _get_pending_videos filters by transcript_extracted == False
-                # If it fails, it remains False.
-                # We need to filter out failed videos in _get_pending_videos.
-                # The TranscriptProcessor updates the Video table status.
-                # So we should join with Video table in _get_pending_videos.
-                
+
             except Exception as e:
                 logger.error(f"Error processing video {vid.video_id}: {e}")
+                # Mark as attempted even on exception to prevent retry loop
+                vid.transcript_extracted = True
                 results.append({
                     "video_id": str(vid.video_id),
                     "success": False,
