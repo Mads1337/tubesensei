@@ -67,8 +67,12 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 # Tools to pre-approve (no permission prompts)
 ALLOWED_TOOLS="Bash,Read,Write,Edit,Glob,Grep,Task,TaskCreate,TaskUpdate,TaskList,TaskGet,NotebookEdit,mcp__ide__getDiagnostics"
 
+# Phase checkpoint file - tracks which phases are done
+CHECKPOINT_FILE="$LOG_DIR/.completed_phases"
+
 # --- Setup ---
 mkdir -p "$LOG_DIR"
+touch "$CHECKPOINT_FILE"
 
 # Create work branch if not already on it
 CURRENT_BRANCH=$(git branch --show-current)
@@ -115,6 +119,14 @@ run_phase() {
     local model="${3:-claude-sonnet-4-6}"  # Default to sonnet 4.6, override with opus where needed
     local log_file="$LOG_DIR/${TIMESTAMP}_${phase_name}.log"
 
+    # Skip if already completed
+    if grep -q "^${phase_name}$" "$CHECKPOINT_FILE" 2>/dev/null; then
+        echo ""
+        echo "  SKIPPING $phase_name (already completed)"
+        echo ""
+        return 0
+    fi
+
     echo ""
     echo "=============================================="
     echo "  PHASE: $phase_name"
@@ -124,39 +136,29 @@ run_phase() {
     echo "=============================================="
     echo ""
 
-    # CLAUDECODE="" allows claude to run from this script context
-    # --output-format stream-json streams progress in real-time
-    # We parse it live to show a progress indicator, and save full output to log
+    # CLAUDECODE="" allows claude to run outside of a parent claude session
+    # Output only appears when the phase finishes (claude -p buffers output)
+    # To watch progress: tail -f <log_file>
+    echo "  Running... (to watch progress: tail -f $log_file)"
+
     CLAUDECODE="" claude -p "$phase_prompt" \
         --model "$model" \
         --allowedTools "$ALLOWED_TOOLS" \
         --max-turns "$MAX_TURNS" \
-        --output-format stream-json 2>&1 | while IFS= read -r line; do
-            echo "$line" >> "$log_file"
-            # Show assistant text and tool use as progress
-            type=$(echo "$line" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('type',''))" 2>/dev/null)
-            if [ "$type" = "assistant" ]; then
-                msg=$(echo "$line" | python3 -c "
-import sys,json
-d=json.load(sys.stdin)
-for b in d.get('message',{}).get('content',[]):
-    if b.get('type')=='text':
-        t=b['text']
-        print(t[:200]+'...' if len(t)>200 else t)
-" 2>/dev/null)
-                [ -n "$msg" ] && echo "  💬 $msg"
-            elif [ "$type" = "result" ]; then
-                echo "  ✅ Phase complete"
-            fi
-        done || true
+        > "$log_file" 2>&1 || true
 
-    local exit_code=${PIPESTATUS[0]}
+    echo ""
+    echo "  Output (last 20 lines):"
+    tail -20 "$log_file"
 
     # Auto-commit any uncommitted work from this phase
     if [ -n "$(git status --porcelain)" ]; then
         git add -A
         git commit -m "auto: complete phase $phase_name [autonomous run]" --no-verify 2>/dev/null || true
     fi
+
+    # Mark phase as completed
+    echo "$phase_name" >> "$CHECKPOINT_FILE"
 
     echo ""
     echo "Phase $phase_name finished with exit code: $exit_code"
