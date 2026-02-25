@@ -434,5 +434,36 @@ def get_settings() -> EnhancedSettings:
     return EnhancedSettings()
 
 
+class RuntimeOverrides:
+    """
+    Holds runtime config overrides that can be mutated without restarting the server.
+    Covers editable settings: feature flags, topic_discovery limits, and logging level.
+    """
+
+    def __init__(self) -> None:
+        self._data: dict = {}
+
+    def update(self, section: str, values: dict) -> None:
+        """Merge *values* into the named section."""
+        if section not in self._data:
+            self._data[section] = {}
+        self._data[section].update(values)
+
+    def get(self, section: str, key: str, default=None):
+        """Return the override value for *section.key*, or *default* if absent."""
+        return self._data.get(section, {}).get(key, default)
+
+    def get_section(self, section: str) -> dict:
+        """Return all overrides for a section (may be empty)."""
+        return dict(self._data.get(section, {}))
+
+    def clear(self) -> None:
+        """Remove all runtime overrides."""
+        self._data.clear()
+
+
+# Singleton runtime-overrides store – import this alongside `settings`
+runtime_overrides = RuntimeOverrides()
+
 # Export settings instance
 settings = get_settings()
