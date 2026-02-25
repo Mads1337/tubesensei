@@ -10,6 +10,8 @@ from app.models.topic_campaign import TopicCampaign, CampaignStatus
 from app.models.campaign_video import CampaignVideo, DiscoverySource
 from app.models.campaign_channel import CampaignChannel
 from app.models.agent_run import AgentRun, AgentType, AgentRunStatus
+from app.models.investigation_agent import InvestigationAgent
+from app.models.investigation_run import InvestigationRun, InvestigationRunStatus
 
 __all__ = [
     "BaseModel",
@@ -41,4 +43,7 @@ __all__ = [
     "AgentRun",
     "AgentType",
     "AgentRunStatus",
+    "InvestigationAgent",
+    "InvestigationRun",
+    "InvestigationRunStatus",
 ]
