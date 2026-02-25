@@ -65,6 +65,15 @@ class TestYouTubeParser:
         assert result['type'] == 'video'
         assert result['video_id'] == 'dQw4w9WgXcQ'
     
+    def test_parse_video_shorts_url(self):
+        """Test parsing Shorts video URL"""
+        url = "https://www.youtube.com/shorts/dQw4w9WgXcQ"
+        result = YouTubeParser.parse_url(url)
+
+        assert result['type'] == 'video'
+        assert result['video_id'] == 'dQw4w9WgXcQ'
+        assert result['id'] == 'dQw4w9WgXcQ'
+
     def test_parse_playlist_url(self):
         """Test parsing playlist URL"""
         url = "https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf"

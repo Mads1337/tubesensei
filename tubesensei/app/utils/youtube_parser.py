@@ -41,6 +41,8 @@ class YouTubeParser:
         re.compile(r'youtu\.be/([\w-]{11})'),
         # Embed URL: youtube.com/embed/xxxxxxxxxxx
         re.compile(r'youtube\.com/embed/([\w-]{11})'),
+        # Shorts URL: youtube.com/shorts/xxxxxxxxxxx
+        re.compile(r'youtube\.com/shorts/([\w-]{11})'),
         # Mobile URL: m.youtube.com/watch?v=xxxxxxxxxxx
         re.compile(r'm\.youtube\.com/watch\?.*v=([\w-]{11})'),
     ]

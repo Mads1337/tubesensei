@@ -12,6 +12,7 @@ from .transcripts import router as transcripts_router
 from .settings import router as settings_router
 from .monitoring import router as monitoring_router
 from .ideas import router as ideas_router
+from .quick_analysis import router as quick_analysis_router
 from app.core.auth import get_current_user
 from app.database import get_db
 
@@ -37,3 +38,4 @@ router.include_router(transcripts_router)
 router.include_router(settings_router)
 router.include_router(monitoring_router)
 router.include_router(ideas_router)
+router.include_router(quick_analysis_router)
