@@ -1,0 +1,83 @@
+<!-- Investigation Section -->
+<div class="space-y-4">
+    <div class="flex items-center justify-between">
+        <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <i class="fas fa-search-plus mr-1"></i> Investigations
+        </h5>
+    </div>
+
+    <!-- Run Investigation Form -->
+    <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+        <form hx-post="/admin/investigations/run"
+              hx-target="#investigation-results-{{ idea_id }}"
+              hx-swap="innerHTML"
+              hx-indicator="#investigation-spinner-{{ idea_id }}"
+              class="flex items-end gap-3">
+            <input type="hidden" name="idea_id" value="{{ idea_id }}">
+            <div class="flex-1">
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Select Agent</label>
+                <select name="agent_id" required
+                        class="block w-full text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-primary-500 focus:border-primary-500">
+                    <option value="">Choose an agent...</option>
+                    {% for agent in agents %}
+                    <option value="{{ agent.id }}">{{ agent.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50">
+                <i class="fas fa-play mr-1"></i> Run
+                <span id="investigation-spinner-{{ idea_id }}" class="htmx-indicator ml-2">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </span>
+            </button>
+        </form>
+    </div>
+
+    <!-- Investigation Results -->
+    <div id="investigation-results-{{ idea_id }}">
+        {% if runs %}
+        <div class="space-y-3">
+            {% for run in runs %}
+            <div class="border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
+                <div class="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700/50 cursor-pointer"
+                     onclick="this.nextElementSibling.classList.toggle('hidden')">
+                    <div class="flex items-center gap-2">
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium
+                            {% if run.status.value == 'completed' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                            {% elif run.status.value == 'failed' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300
+                            {% elif run.status.value == 'running' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300
+                            {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300{% endif %}">
+                            {{ run.status.value }}
+                        </span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ run.agent.name }}</span>
+                    </div>
+                    <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                        {% if run.tokens_used %}
+                        <span><i class="fas fa-coins mr-1"></i>{{ run.tokens_used }} tokens</span>
+                        {% endif %}
+                        {% if run.estimated_cost_usd %}
+                        <span>${{ "%.4f"|format(run.estimated_cost_usd) }}</span>
+                        {% endif %}
+                        <span>{{ run.created_at.strftime('%Y-%m-%d %H:%M') if run.created_at else '' }}</span>
+                        <i class="fas fa-chevron-down text-gray-400"></i>
+                    </div>
+                </div>
+                <div class="hidden px-3 py-3 bg-white dark:bg-gray-800">
+                    {% if run.status.value == 'completed' and run.result %}
+                    <div class="prose prose-sm dark:prose-invert max-w-none text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{{ run.result }}</div>
+                    {% elif run.status.value == 'failed' and run.error_message %}
+                    <div class="text-sm text-red-600 dark:text-red-400">
+                        <i class="fas fa-exclamation-triangle mr-1"></i> {{ run.error_message }}
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-gray-500 dark:text-gray-400 italic">No results available.</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-gray-500 dark:text-gray-400 italic">No investigations yet. Select an agent above to analyze this idea.</p>
+        {% endif %}
+    </div>
+</div>
