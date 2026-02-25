@@ -10,39 +10,36 @@
     <!-- Header -->
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Monitored Channels</h1>
-        <button 
+        <a href="/admin/channels/add"
             class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-            hx-get="/admin/channels/add"
-            hx-target="#modal-container"
-            hx-swap="innerHTML"
         >
             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
             Add Channel
-        </button>
+        </a>
     </div>
 
     <!-- Filters -->
     <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-6">
-        <form class="flex gap-4" hx-get="/admin/channels" hx-target="#channels-grid" hx-swap="innerHTML">
+        <form class="flex gap-4" hx-get="/admin/channels/" hx-target="#channels-grid" hx-swap="innerHTML">
             <div class="flex-1">
-                <input 
-                    type="text" 
+                <input
+                    type="text"
                     name="search"
                     placeholder="Search channels..."
                     value="{{ filters.search or '' }}"
                     class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                    hx-get="/admin/channels"
+                    hx-get="/admin/channels/"
                     hx-trigger="keyup changed delay:500ms"
                     hx-target="#channels-grid"
                     hx-swap="innerHTML"
                 >
             </div>
-            <select 
-                name="status" 
+            <select
+                name="status"
                 class="block px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                hx-get="/admin/channels"
+                hx-get="/admin/channels/"
                 hx-trigger="change"
                 hx-target="#channels-grid"
                 hx-swap="innerHTML"
@@ -166,8 +163,7 @@
                     <button
                         class="flex-1 px-3 py-1 text-sm bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300 rounded hover:bg-primary-200 dark:hover:bg-primary-800"
                         hx-post="/admin/channels/{{ channel.id }}/sync"
-                        hx-target="#channels-grid"
-                        hx-swap="outerHTML"
+                        hx-swap="none"
                     >
                         <i class="fas fa-sync-alt mr-1"></i>
                         Sync
@@ -195,15 +191,12 @@
                     Get started by adding your first YouTube channel.
                 {% endif %}
             </p>
-            <button
+            <a href="/admin/channels/add"
                 class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700"
-                hx-get="/admin/channels/add"
-                hx-target="#modal-container"
-                hx-swap="innerHTML"
             >
                 <i class="fas fa-plus mr-2"></i>
                 Add Your First Channel
-            </button>
+            </a>
         </div>
         {% endif %}
     </div>

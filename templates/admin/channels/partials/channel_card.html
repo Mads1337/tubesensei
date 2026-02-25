@@ -82,25 +82,17 @@
                             <i class="fas fa-sync-alt mr-2"></i> Sync Now
                         </button>
                         {% if channel.status == 'active' %}
-                        <button 
+                        <a href="/admin/channels/{{ channel.id }}/edit"
                             class="block w-full text-left px-4 py-2 text-sm text-yellow-700 dark:text-yellow-300 hover:bg-yellow-50 dark:hover:bg-yellow-900"
-                            hx-put="/admin/channels/{{ channel.id }}/status"
-                            hx-vals='{"status": "paused"}'
-                            hx-target="closest .bg-white"
-                            hx-swap="outerHTML"
                         >
                             <i class="fas fa-pause mr-2"></i> Pause
-                        </button>
+                        </a>
                         {% elif channel.status == 'paused' %}
-                        <button 
+                        <a href="/admin/channels/{{ channel.id }}/edit"
                             class="block w-full text-left px-4 py-2 text-sm text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900"
-                            hx-put="/admin/channels/{{ channel.id }}/status"
-                            hx-vals='{"status": "active"}'
-                            hx-target="closest .bg-white"
-                            hx-swap="outerHTML"
                         >
                             <i class="fas fa-play mr-2"></i> Resume
-                        </button>
+                        </a>
                         {% endif %}
                     </div>
                 </div>

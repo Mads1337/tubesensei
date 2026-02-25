@@ -97,17 +97,26 @@ async def list_campaigns(
     total = total_result.scalar() or 0
     total_pages = (total + per_page - 1) // per_page
 
+    context = {
+        "request": request,
+        "campaigns": campaigns,
+        "stats": stats,
+        "filters": {"search": search, "status": status},
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+    }
+
+    is_htmx = request.headers.get("HX-Request") == "true"
+    if is_htmx:
+        return templates.TemplateResponse(
+            "admin/topic_campaigns/partials/campaigns_list.html",
+            context,
+        )
+
     return templates.TemplateResponse(
         "admin/topic_campaigns/list.html",
-        {
-            "request": request,
-            "campaigns": campaigns,
-            "stats": stats,
-            "filters": {"search": search, "status": status},
-            "page": page,
-            "total_pages": total_pages,
-            "total": total,
-        }
+        context,
     )
 
 

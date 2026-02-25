@@ -12,16 +12,27 @@
         <div>
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white">System Settings</h1>
             <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Read-only view of system configuration. Settings are configured via environment variables.
+                Configure runtime settings. Read-only settings require a server restart to change.
             </p>
         </div>
     </div>
 
+    {% if success_message %}
+    <div class="mb-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+        <div class="flex items-center">
+            <i class="fas fa-check-circle text-green-500 mr-3"></i>
+            <p class="text-sm text-green-800 dark:text-green-200">{{ success_message }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/admin/settings/">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Application Settings -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
                 <i class="fas fa-cog text-primary-500 mr-2"></i>Application
+                <span class="ml-auto text-xs text-gray-400 font-normal">Read-only</span>
             </h2>
             <dl class="space-y-3">
                 <div class="flex justify-between">
@@ -75,6 +86,7 @@
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
                 <i class="fas fa-key text-yellow-500 mr-2"></i>API Keys
+                <span class="ml-auto text-xs text-gray-400 font-normal">Read-only</span>
             </h2>
             <dl class="space-y-3">
                 <div class="flex justify-between items-center">
@@ -127,54 +139,39 @@
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
                 <i class="fas fa-toggle-on text-green-500 mr-2"></i>Feature Flags
             </h2>
-            <dl class="space-y-3">
+            <div class="space-y-3">
                 <div class="flex justify-between items-center">
-                    <dt class="text-sm text-gray-500 dark:text-gray-400">User Registration</dt>
-                    <dd>
-                        {% if settings_data.features.registration_enabled %}
-                        <span class="text-green-600 dark:text-green-400"><i class="fas fa-check-circle"></i></span>
-                        {% else %}
-                        <span class="text-gray-400"><i class="fas fa-times-circle"></i></span>
-                        {% endif %}
-                    </dd>
+                    <label class="text-sm text-gray-500 dark:text-gray-400" for="registration_enabled">User Registration</label>
+                    <input type="checkbox" id="registration_enabled" name="registration_enabled" value="true"
+                           {% if settings_data.features.registration_enabled %}checked{% endif %}
+                           class="h-4 w-4 text-primary-600 rounded">
                 </div>
                 <div class="flex justify-between items-center">
-                    <dt class="text-sm text-gray-500 dark:text-gray-400">API Documentation</dt>
-                    <dd>
-                        {% if settings_data.features.api_docs_enabled %}
-                        <span class="text-green-600 dark:text-green-400"><i class="fas fa-check-circle"></i></span>
-                        {% else %}
-                        <span class="text-gray-400"><i class="fas fa-times-circle"></i></span>
-                        {% endif %}
-                    </dd>
+                    <label class="text-sm text-gray-500 dark:text-gray-400" for="api_docs_enabled">API Documentation</label>
+                    <input type="checkbox" id="api_docs_enabled" name="api_docs_enabled" value="true"
+                           {% if settings_data.features.api_docs_enabled %}checked{% endif %}
+                           class="h-4 w-4 text-primary-600 rounded">
                 </div>
                 <div class="flex justify-between items-center">
-                    <dt class="text-sm text-gray-500 dark:text-gray-400">Metrics Collection</dt>
-                    <dd>
-                        {% if settings_data.features.metrics_enabled %}
-                        <span class="text-green-600 dark:text-green-400"><i class="fas fa-check-circle"></i></span>
-                        {% else %}
-                        <span class="text-gray-400"><i class="fas fa-times-circle"></i></span>
-                        {% endif %}
-                    </dd>
+                    <label class="text-sm text-gray-500 dark:text-gray-400" for="metrics_enabled">Metrics Collection</label>
+                    <input type="checkbox" id="metrics_enabled" name="metrics_enabled" value="true"
+                           {% if settings_data.features.metrics_enabled %}checked{% endif %}
+                           class="h-4 w-4 text-primary-600 rounded">
                 </div>
                 <div class="flex justify-between items-center">
-                    <dt class="text-sm text-gray-500 dark:text-gray-400">Health Checks</dt>
-                    <dd>
-                        {% if settings_data.features.health_checks_enabled %}
-                        <span class="text-green-600 dark:text-green-400"><i class="fas fa-check-circle"></i></span>
-                        {% else %}
-                        <span class="text-gray-400"><i class="fas fa-times-circle"></i></span>
-                        {% endif %}
-                    </dd>
+                    <label class="text-sm text-gray-500 dark:text-gray-400" for="health_checks_enabled">Health Checks</label>
+                    <input type="checkbox" id="health_checks_enabled" name="health_checks_enabled" value="true"
+                           {% if settings_data.features.health_checks_enabled %}checked{% endif %}
+                           class="h-4 w-4 text-primary-600 rounded">
                 </div>
-            </dl>
+            </div>
         </div>
 
         <!-- Security Settings -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
                 <i class="fas fa-shield-alt text-red-500 mr-2"></i>Security
+                <span class="ml-auto text-xs text-gray-400 font-normal">Read-only</span>
             </h2>
             <dl class="space-y-3">
                 <div class="flex justify-between">
@@ -211,42 +208,61 @@
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
                 <i class="fas fa-compass text-purple-500 mr-2"></i>Topic Discovery
             </h2>
-            <dl class="space-y-3">
-                <div class="flex justify-between">
-                    <dt class="text-sm text-gray-500 dark:text-gray-400">Default Video Limit</dt>
-                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.topic_discovery.default_video_limit }}</dd>
+            <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <label class="text-sm text-gray-500 dark:text-gray-400" for="default_video_limit">Default Video Limit</label>
+                    <input type="number" id="default_video_limit" name="default_video_limit"
+                           value="{{ settings_data.topic_discovery.default_video_limit }}"
+                           min="1" max="10000"
+                           class="w-24 text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                 </div>
-                <div class="flex justify-between">
-                    <dt class="text-sm text-gray-500 dark:text-gray-400">Default Channel Limit</dt>
-                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.topic_discovery.default_channel_limit }}</dd>
+                <div class="flex justify-between items-center">
+                    <label class="text-sm text-gray-500 dark:text-gray-400" for="default_channel_limit">Default Channel Limit</label>
+                    <input type="number" id="default_channel_limit" name="default_channel_limit"
+                           value="{{ settings_data.topic_discovery.default_channel_limit }}"
+                           min="1" max="10000"
+                           class="w-24 text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                 </div>
-                <div class="flex justify-between">
-                    <dt class="text-sm text-gray-500 dark:text-gray-400">Search Limit</dt>
-                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.topic_discovery.search_limit }}</dd>
+                <div class="flex justify-between items-center">
+                    <label class="text-sm text-gray-500 dark:text-gray-400" for="search_limit">Search Limit</label>
+                    <input type="number" id="search_limit" name="search_limit"
+                           value="{{ settings_data.topic_discovery.search_limit }}"
+                           min="1" max="10000"
+                           class="w-24 text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                 </div>
-                <div class="flex justify-between">
-                    <dt class="text-sm text-gray-500 dark:text-gray-400">Similar Video Depth</dt>
-                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.topic_discovery.similar_depth }}</dd>
+                <div class="flex justify-between items-center">
+                    <label class="text-sm text-gray-500 dark:text-gray-400" for="similar_depth">Similar Video Depth</label>
+                    <input type="number" id="similar_depth" name="similar_depth"
+                           value="{{ settings_data.topic_discovery.similar_depth }}"
+                           min="1" max="100"
+                           class="w-24 text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                 </div>
-                <div class="flex justify-between">
-                    <dt class="text-sm text-gray-500 dark:text-gray-400">Filter Threshold</dt>
-                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.topic_discovery.filter_threshold }}</dd>
+                <div class="flex justify-between items-center">
+                    <label class="text-sm text-gray-500 dark:text-gray-400" for="filter_threshold">Filter Threshold</label>
+                    <input type="number" id="filter_threshold" name="filter_threshold"
+                           value="{{ settings_data.topic_discovery.filter_threshold }}"
+                           min="0" max="1" step="0.01"
+                           class="w-24 text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                 </div>
-                <div class="flex justify-between">
-                    <dt class="text-sm text-gray-500 dark:text-gray-400">Filter Model</dt>
-                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.topic_discovery.filter_model }}</dd>
+                <div class="flex justify-between items-center">
+                    <label class="text-sm text-gray-500 dark:text-gray-400">Filter Model</label>
+                    <span class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.topic_discovery.filter_model }}</span>
                 </div>
-                <div class="flex justify-between">
-                    <dt class="text-sm text-gray-500 dark:text-gray-400">Max Concurrent Agents</dt>
-                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.topic_discovery.max_concurrent_agents }}</dd>
+                <div class="flex justify-between items-center">
+                    <label class="text-sm text-gray-500 dark:text-gray-400" for="max_concurrent_agents">Max Concurrent Agents</label>
+                    <input type="number" id="max_concurrent_agents" name="max_concurrent_agents"
+                           value="{{ settings_data.topic_discovery.max_concurrent_agents }}"
+                           min="1" max="100"
+                           class="w-24 text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                 </div>
-            </dl>
+            </div>
         </div>
 
         <!-- Database Settings -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
                 <i class="fas fa-database text-blue-500 mr-2"></i>Database
+                <span class="ml-auto text-xs text-gray-400 font-normal">Read-only</span>
             </h2>
             <dl class="space-y-3">
                 <div class="flex justify-between">
@@ -278,6 +294,7 @@
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
                 <i class="fas fa-memory text-red-500 mr-2"></i>Redis
+                <span class="ml-auto text-xs text-gray-400 font-normal">Read-only</span>
             </h2>
             <dl class="space-y-3">
                 <div class="flex justify-between">
@@ -300,10 +317,15 @@
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
                 <i class="fas fa-file-alt text-gray-500 mr-2"></i>Logging
             </h2>
-            <dl class="space-y-3">
-                <div class="flex justify-between">
-                    <dt class="text-sm text-gray-500 dark:text-gray-400">Level</dt>
-                    <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.logging.level }}</dd>
+            <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <label class="text-sm text-gray-500 dark:text-gray-400" for="log_level">Level</label>
+                    <select id="log_level" name="log_level"
+                            class="text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        {% for level in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] %}
+                        <option value="{{ level }}" {% if settings_data.logging.level == level %}selected{% endif %}>{{ level }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="flex justify-between">
                     <dt class="text-sm text-gray-500 dark:text-gray-400">Format</dt>
@@ -317,13 +339,14 @@
                     <dt class="text-sm text-gray-500 dark:text-gray-400">Retention</dt>
                     <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ settings_data.logging.retention }}</dd>
                 </div>
-            </dl>
+            </div>
         </div>
 
         <!-- Admin UI Settings -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
                 <i class="fas fa-desktop text-indigo-500 mr-2"></i>Admin UI
+                <span class="ml-auto text-xs text-gray-400 font-normal">Read-only</span>
             </h2>
             <dl class="space-y-3">
                 <div class="flex justify-between">
@@ -352,18 +375,25 @@
         </div>
     </div>
 
+    <!-- Save Button -->
+    <div class="mt-6 flex justify-end">
+        <button type="submit" class="bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-6 rounded-lg transition-colors">
+            <i class="fas fa-save mr-2"></i>Save Settings
+        </button>
+    </div>
+
     <!-- Info Notice -->
     <div class="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
         <div class="flex">
             <i class="fas fa-info-circle text-blue-500 mt-0.5 mr-3"></i>
             <div>
-                <h3 class="text-sm font-medium text-blue-800 dark:text-blue-200">Configuration via Environment Variables</h3>
+                <h3 class="text-sm font-medium text-blue-800 dark:text-blue-200">Runtime vs Restart Settings</h3>
                 <p class="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                    All settings are configured through environment variables or the <code class="bg-blue-100 dark:bg-blue-900 px-1 rounded">.env</code> file.
-                    Changes require a server restart to take effect.
+                    Feature flags, topic discovery limits, and logging level can be changed at runtime. Other settings (database, security, API keys) require a server restart.
                 </p>
             </div>
         </div>
     </div>
+    </form>
 </div>
 {% endblock %}

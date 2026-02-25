@@ -61,6 +61,9 @@ async def channels_page(
     
     total_pages = (result["total"] + limit - 1) // limit
     
+    # Check if this is an HTMX request for just the grid content
+    is_htmx = request.headers.get("HX-Request") == "true"
+
     context = get_template_context(
         request,
         user=user,
@@ -73,7 +76,10 @@ async def channels_page(
             "search": search
         }
     )
-    
+
+    if is_htmx:
+        return templates.TemplateResponse("admin/channels/partials/channels_grid.html", context)
+
     return templates.TemplateResponse("admin/channels/list.html", context)
 
 

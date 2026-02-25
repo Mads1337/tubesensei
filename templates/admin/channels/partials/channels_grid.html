@@ -1,0 +1,136 @@
+{% for channel in channels %}
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+    <div class="p-6">
+        <!-- Channel Header -->
+        <div class="flex items-start justify-between mb-4">
+            <div class="flex items-center">
+                {% if channel.thumbnail_url %}
+                <img
+                    src="{{ channel.thumbnail_url }}"
+                    alt="{{ channel.name }}"
+                    class="w-12 h-12 rounded-full mr-3 object-cover"
+                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                >
+                <div class="w-12 h-12 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center mr-3 text-primary-600 dark:text-primary-400 font-bold text-lg" style="display: none;">
+                    {{ channel.name[0]|upper if channel.name else '?' }}
+                </div>
+                {% else %}
+                <div class="w-12 h-12 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center mr-3 text-primary-600 dark:text-primary-400 font-bold text-lg">
+                    {{ channel.name[0]|upper if channel.name else '?' }}
+                </div>
+                {% endif %}
+                <div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white">
+                        <a href="/admin/channels/{{ channel.id }}"
+                           class="hover:text-primary-600 dark:hover:text-primary-400">
+                            {{ channel.name }}
+                        </a>
+                    </h3>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                               {% if channel.status == 'active' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                               {% elif channel.status == 'paused' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300
+                               {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300{% endif %}">
+                        {{ channel.status | title }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Channel Stats -->
+        <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <div>
+                <span class="font-medium">Subscribers:</span>
+                {% if channel.subscriber_count %}
+                    {% if channel.subscriber_count >= 1000000 %}
+                        {{ "%.1fM"|format(channel.subscriber_count / 1000000) }}
+                    {% elif channel.subscriber_count >= 1000 %}
+                        {{ "%.1fK"|format(channel.subscriber_count / 1000) }}
+                    {% else %}
+                        {{ channel.subscriber_count }}
+                    {% endif %}
+                {% else %}
+                    N/A
+                {% endif %}
+            </div>
+            <div>
+                <span class="font-medium">Videos:</span>
+                {% if channel.stats and channel.stats.total_videos %}
+                    <span class="text-green-600 dark:text-green-400">{{ channel.stats.processed_videos }}</span>/{{ channel.stats.total_videos }}
+                {% elif channel.video_count %}
+                    {{ channel.video_count }} (YT)
+                {% else %}
+                    0
+                {% endif %}
+            </div>
+            <div>
+                <span class="font-medium">Ideas:</span>
+                {% if channel.stats and channel.stats.total_ideas %}
+                    {{ channel.stats.total_ideas }}
+                {% else %}
+                    0
+                {% endif %}
+            </div>
+            <div>
+                <span class="font-medium">Last Sync:</span>
+                {% if channel.last_checked_at %}
+                    {{ channel.last_checked_at.strftime('%m/%d %H:%M') }}
+                {% else %}
+                    Never
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Processing Status -->
+        {% if channel.stats and channel.stats.processing_videos > 0 %}
+        <div class="mb-3 px-2 py-1 bg-blue-50 dark:bg-blue-900/30 rounded text-xs text-blue-700 dark:text-blue-300">
+            <i class="fas fa-spinner fa-spin mr-1"></i>
+            {{ channel.stats.processing_videos }} video(s) processing...
+        </div>
+        {% elif channel.stats and channel.stats.failed_videos > 0 %}
+        <div class="mb-3 px-2 py-1 bg-red-50 dark:bg-red-900/30 rounded text-xs text-red-700 dark:text-red-300">
+            <i class="fas fa-exclamation-triangle mr-1"></i>
+            {{ channel.stats.failed_videos }} video(s) failed
+        </div>
+        {% endif %}
+
+        <!-- Actions -->
+        <div class="flex space-x-2">
+            <button
+                class="flex-1 px-3 py-1 text-sm bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300 rounded hover:bg-primary-200 dark:hover:bg-primary-800"
+                hx-post="/admin/channels/{{ channel.id }}/sync"
+                hx-swap="none"
+            >
+                <i class="fas fa-sync-alt mr-1"></i>
+                Sync
+            </button>
+            <a href="/admin/channels/{{ channel.id }}/edit"
+               class="flex-1 text-center px-3 py-1 text-sm bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
+                <i class="fas fa-edit mr-1"></i>
+                Edit
+            </a>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% if not channels %}
+<div class="col-span-full text-center py-12 bg-white dark:bg-gray-800 rounded-lg">
+    <div class="text-gray-400 dark:text-gray-600 mb-4">
+        <i class="fas fa-tv text-6xl"></i>
+    </div>
+    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No channels found</h3>
+    <p class="text-gray-600 dark:text-gray-400 mb-4">
+        {% if filters.search or filters.status %}
+            Try adjusting your filters or search terms.
+        {% else %}
+            Get started by adding your first YouTube channel.
+        {% endif %}
+    </p>
+    <a href="/admin/channels/add"
+        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700"
+    >
+        <i class="fas fa-plus mr-2"></i>
+        Add Your First Channel
+    </a>
+</div>
+{% endif %}
