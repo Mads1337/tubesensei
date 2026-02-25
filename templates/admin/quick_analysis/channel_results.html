@@ -1,0 +1,79 @@
+<!-- Quick Analysis - Channel Results Partial (HTMX swap target) -->
+
+{% if error %}
+<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-6">
+    <div class="flex items-start gap-3">
+        <div class="flex-shrink-0 text-red-500 dark:text-red-400">
+            <i class="fas fa-exclamation-circle text-xl"></i>
+        </div>
+        <div>
+            <h4 class="text-sm font-semibold text-red-800 dark:text-red-300">Analysis Failed</h4>
+            <p class="mt-1 text-sm text-red-700 dark:text-red-400">{{ error }}</p>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- Channel Info Card -->
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+    <div class="p-5">
+        <div class="flex items-start gap-4">
+            {% if channel.thumbnail_url %}
+            <img src="{{ channel.thumbnail_url }}"
+                 alt="{{ channel.title }}"
+                 class="w-16 h-16 rounded-full object-cover flex-shrink-0" />
+            {% endif %}
+            <div class="flex-1 min-w-0">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    <a href="https://www.youtube.com/channel/{{ channel.channel_id }}"
+                       target="_blank" rel="noopener"
+                       class="hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                        {{ channel.title }}
+                    </a>
+                </h3>
+                {% if channel.description %}
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">{{ channel.description }}</p>
+                {% endif %}
+                <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                    <span><i class="fas fa-users mr-1"></i>{{ channel.subs_display }} subscribers</span>
+                    <span><i class="fas fa-video mr-1"></i>{{ channel.video_count }} videos</span>
+                    <span><i class="fas fa-film mr-1"></i>Analyzing {{ videos_found }} videos</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if warning %}
+<div class="mt-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4">
+    <div class="flex items-start gap-3">
+        <i class="fas fa-exclamation-triangle text-yellow-500 dark:text-yellow-400 flex-shrink-0"></i>
+        <p class="text-sm text-yellow-700 dark:text-yellow-400">{{ warning }}</p>
+    </div>
+</div>
+{% endif %}
+
+{% if job_id %}
+<!-- Progress Area (auto-polls for updates) -->
+<div id="channel-progress-area"
+     hx-get="/admin/quick-analysis/channel/progress/{{ job_id }}"
+     hx-trigger="load, every 3s"
+     hx-swap="innerHTML"
+     class="mt-4">
+    <!-- Initial loading state -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div class="flex items-center gap-3 mb-3">
+            <i class="fas fa-spinner fa-spin text-primary-500"></i>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">Starting analysis...</span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+            <div class="bg-primary-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            Processing 0 of {{ videos_found }} videos...
+        </p>
+    </div>
+</div>
+{% endif %}
+
+{% endif %}

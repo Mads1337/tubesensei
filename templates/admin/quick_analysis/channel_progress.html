@@ -1,0 +1,115 @@
+<!-- Channel Analysis Progress Partial (polled by HTMX every 3s) -->
+
+{% if not job %}
+<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4">
+    <p class="text-sm text-red-700 dark:text-red-400">Analysis job not found.</p>
+</div>
+
+{% else %}
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6"
+     {% if job.status == 'running' %}
+     hx-get="/admin/quick-analysis/channel/progress/{{ job_id }}"
+     hx-trigger="every 3s"
+     hx-swap="outerHTML"
+     {% endif %}>
+
+    <!-- Progress Header -->
+    <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-3">
+            {% if job.status == 'running' %}
+            <i class="fas fa-spinner fa-spin text-primary-500"></i>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">Analyzing videos...</span>
+            {% elif job.status == 'completed' %}
+            <i class="fas fa-check-circle text-green-500"></i>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">Analysis Complete</span>
+            {% elif job.status == 'failed' %}
+            <i class="fas fa-times-circle text-red-500"></i>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">Analysis Failed</span>
+            {% else %}
+            <i class="fas fa-ban text-gray-500"></i>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">Analysis Cancelled</span>
+            {% endif %}
+        </div>
+        <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+            <span><i class="fas fa-lightbulb text-yellow-500 mr-1"></i>{{ job.total_ideas }} ideas</span>
+            <span><i class="fas fa-check text-green-500 mr-1"></i>{{ job.succeeded }}/{{ job.total_videos }}</span>
+            {% if job.failed > 0 %}
+            <span><i class="fas fa-times text-red-500 mr-1"></i>{{ job.failed }} failed</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Progress Bar -->
+    {% set pct = ((job.processed / job.total_videos) * 100) if job.total_videos > 0 else 0 %}
+    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+        <div class="h-2 rounded-full transition-all duration-500
+                    {% if job.status == 'completed' %}bg-green-500{% elif job.status == 'failed' %}bg-red-500{% else %}bg-primary-500{% endif %}"
+             style="width: {{ pct|int }}%"></div>
+    </div>
+    <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+        Processed {{ job.processed }} of {{ job.total_videos }} videos ({{ pct|int }}%)
+    </p>
+
+    {% if job.error %}
+    <div class="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-3">
+        <p class="text-sm text-red-700 dark:text-red-400">{{ job.error }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Video Results List -->
+    {% if job.video_results %}
+    <div class="space-y-2">
+        {% for vr in job.video_results %}
+        <div class="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+             {% if vr.ideas %}x-data="{ open: false }"{% endif %}>
+            <div class="flex-1 min-w-0 {% if vr.ideas %}cursor-pointer{% endif %}"
+                 {% if vr.ideas %}@click="open = !open"{% endif %}>
+                <div class="flex items-center gap-2">
+                    {% if vr.status == 'done' %}
+                    <i class="fas fa-check-circle text-green-500 text-xs flex-shrink-0"></i>
+                    {% elif vr.status == 'failed' or vr.status == 'skipped' %}
+                    <i class="fas fa-times-circle text-red-400 text-xs flex-shrink-0"></i>
+                    {% else %}
+                    <i class="fas fa-spinner fa-spin text-gray-400 text-xs flex-shrink-0"></i>
+                    {% endif %}
+                    <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ vr.title }}</span>
+                </div>
+
+                {% if vr.ideas %}
+                <div class="mt-1 flex items-center gap-2">
+                    <span class="text-xs text-primary-600 dark:text-primary-400">
+                        <i class="fas fa-lightbulb mr-1"></i>{{ vr.ideas|length }} idea{{ 's' if vr.ideas|length != 1 else '' }}
+                    </span>
+                    <i class="fas fa-chevron-right text-gray-400 text-xs transition-transform duration-200"
+                       :class="{ 'rotate-90': open }"></i>
+                </div>
+
+                <!-- Expanded ideas -->
+                <div x-show="open" x-transition class="mt-2 space-y-1 pl-4 border-l-2 border-primary-200 dark:border-primary-700">
+                    {% for idea in vr.ideas %}
+                    <div class="py-1">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-medium text-gray-800 dark:text-gray-200">{{ idea.title }}</span>
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs
+                                {% if idea.confidence >= 0.7 %}bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300
+                                {% elif idea.confidence >= 0.4 %}bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300
+                                {% else %}bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300{% endif %}">
+                                {{ idea.confidence_pct }}%
+                            </span>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{{ idea.description }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if vr.error %}
+                <p class="mt-1 text-xs text-red-500 dark:text-red-400">{{ vr.error }}</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
