@@ -12,6 +12,7 @@ from app.models.campaign_channel import CampaignChannel
 from app.models.agent_run import AgentRun, AgentType, AgentRunStatus
 from app.models.investigation_agent import InvestigationAgent
 from app.models.investigation_run import InvestigationRun, InvestigationRunStatus
+from app.models.webhook import Webhook
 
 __all__ = [
     "BaseModel",
@@ -46,4 +47,5 @@ __all__ = [
     "InvestigationAgent",
     "InvestigationRun",
     "InvestigationRunStatus",
+    "Webhook",
 ]

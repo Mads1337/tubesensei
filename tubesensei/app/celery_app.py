@@ -13,7 +13,8 @@ def create_celery_app() -> Celery:
         backend=settings.CELERY_RESULT_BACKEND,
         include=[
             "app.workers.processing_tasks",
-            "app.workers.topic_discovery_tasks"
+            "app.workers.topic_discovery_tasks",
+            "app.workers.export_tasks",
         ]
     )
     
@@ -87,10 +88,20 @@ def create_celery_app() -> Celery:
     
     # Beat schedule for periodic tasks (if using celery-beat)
     celery_app.conf.beat_schedule = {
-        # Example: clean up old jobs every hour
+        # Clean up old jobs every hour
         'cleanup-old-jobs': {
             'task': 'app.workers.processing_tasks.cleanup_old_jobs_task',
             'schedule': 3600.0,  # Every hour
+        },
+        # Daily export at 06:00 UTC
+        'scheduled-daily-export': {
+            'task': 'app.workers.export_tasks.scheduled_daily_export_task',
+            'schedule': 86400.0,  # Every 24 hours
+        },
+        # Weekly export every Monday at 07:00 UTC
+        'scheduled-weekly-export': {
+            'task': 'app.workers.export_tasks.scheduled_weekly_export_task',
+            'schedule': 604800.0,  # Every 7 days
         },
     }
     

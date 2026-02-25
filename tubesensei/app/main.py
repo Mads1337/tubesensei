@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 
 from app.config import settings
+from app.core.rate_limiter import RateLimitMiddleware
 from app.database import get_db as get_session, init_db, close_db
 from app.models.channel import Channel
 from app.models.video import Video
@@ -50,6 +51,14 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Add rate limiting middleware
+app.add_middleware(
+    RateLimitMiddleware,
+    redis_url=settings.REDIS_URL,
+    requests_per_minute=settings.RATE_LIMIT_REQUESTS_PER_MINUTE,
+    enabled=True,
 )
 
 

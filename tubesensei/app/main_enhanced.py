@@ -20,6 +20,7 @@ import redis.asyncio as aioredis
 
 from app.core.config import settings
 from app.core.exceptions import setup_exception_handlers
+from app.core.rate_limiter import RateLimitMiddleware
 from app.database import get_db as get_session, init_db, close_db
 
 # Import existing routers
@@ -92,9 +93,62 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title=settings.APP_NAME,
+    title="TubeSensei API",
     version=settings.APP_VERSION,
-    description="YouTube Content Analysis Platform with Admin Interface",
+    description="""
+## TubeSensei - YouTube Content Analysis Platform
+
+TubeSensei automatically discovers YouTube videos, extracts transcripts, and uses AI to identify
+business ideas and insights.
+
+### Features
+- **Campaign Management**: Create and run topic-based video discovery campaigns
+- **Idea Extraction**: AI-powered extraction of business ideas from video transcripts
+- **Channel Analysis**: Analyze entire YouTube channels
+- **Export**: Export ideas in JSON or CSV format
+
+### Authentication
+All API endpoints (except health checks) require authentication via JWT Bearer token.
+
+Include the token in the Authorization header:
+```
+Authorization: Bearer <your-token>
+```
+
+### API Versioning
+The main REST API is available at `/api/v1/`.
+""",
+    openapi_tags=[
+        {
+            "name": "Health",
+            "description": "Health check endpoints for monitoring application status",
+        },
+        {
+            "name": "Topic Campaigns",
+            "description": (
+                "Manage topic-based video discovery campaigns. "
+                "Campaigns discover, filter and transcribe YouTube videos matching a given topic."
+            ),
+        },
+        {
+            "name": "Ideas",
+            "description": "View and manage AI-extracted business ideas from video transcripts",
+        },
+        {
+            "name": "Videos",
+            "description": "View YouTube videos discovered by campaigns",
+        },
+        {
+            "name": "Channels",
+            "description": "Manage YouTube channels tracked by the platform",
+        },
+        {
+            "name": "Export",
+            "description": "Export campaign results and ideas in JSON or CSV format",
+        },
+    ],
+    contact={"name": "TubeSensei", "url": "https://github.com/tubesensei"},
+    license_info={"name": "MIT"},
     lifespan=lifespan,
     debug=settings.DEBUG,
     docs_url="/api/docs" if settings.FEATURES_ENABLE_API_DOCS else None,
@@ -130,7 +184,16 @@ app.add_middleware(
     https_only=settings.security.SESSION_COOKIE_SECURE,
 )
 
-# 4. GZip Middleware
+# 4. Rate Limiting Middleware
+if settings.security.RATE_LIMIT_ENABLED:
+    app.add_middleware(
+        RateLimitMiddleware,
+        redis_url=settings.REDIS_URL,
+        requests_per_minute=settings.security.RATE_LIMIT_REQUESTS_PER_MINUTE,
+        enabled=True,
+    )
+
+# 5. GZip Middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # 5. Custom Request ID Middleware
@@ -256,7 +319,7 @@ async def root(request: Request):
     )
 
 # Health check endpoints
-@app.get("/health")
+@app.get("/health", tags=["Health"])
 async def health_check():
     """Basic health check"""
     return {
@@ -266,10 +329,9 @@ async def health_check():
         "environment": settings.ENVIRONMENT
     }
 
-@app.get("/health/detailed")
+@app.get("/health/detailed", tags=["Health"])
 async def detailed_health_check(
     session: AsyncSession = Depends(get_session),
-    request: Request = None
 ):
     """Detailed health check with component status"""
     health_status = {

@@ -80,7 +80,7 @@ async def channels_page(
 @router.get("/validate-url")
 async def validate_channel_url(
     url: str = Query(..., description="YouTube channel URL to validate"),
-    _user = Depends(get_current_user)
+    user=Depends(get_current_user)
 ):
     """Validate YouTube channel URL for HTMX"""
     if not url:
@@ -125,10 +125,10 @@ async def add_channel_form(
 @router.post("/add")
 async def add_channel(
     url: Optional[str] = Form(None, description="YouTube channel URL"),
-    _name: Optional[str] = Form(None, description="Channel name (optional)"),
-    _description: Optional[str] = Form(None, description="Channel description (optional)"),
-    _user = Depends(require_permission(Permission.CHANNEL_WRITE)),
-    db = Depends(get_db)
+    channel_name: Optional[str] = Form(None, description="Channel name (optional)"),
+    channel_description: Optional[str] = Form(None, description="Channel description (optional)"),
+    user=Depends(require_permission(Permission.CHANNEL_WRITE)),
+    db=Depends(get_db)
 ):
     """Add new channel"""
     service = ChannelService(db)
@@ -244,10 +244,10 @@ async def update_channel(
     channel_id: UUID,
     status: Optional[str] = Form(None),
     sync_frequency: Optional[int] = Form(None),
-    _priority: Optional[str] = Form(None),
-    _max_videos: Optional[int] = Form(None),
+    priority: Optional[str] = Form(None),
+    max_videos: Optional[int] = Form(None),
     auto_sync: Optional[str] = Form(None),
-    _user = Depends(require_permission(Permission.CHANNEL_WRITE)),
+    user=Depends(require_permission(Permission.CHANNEL_WRITE)),
     db = Depends(get_db)
 ):
     """Update channel — accepts form data and returns an HTMX-friendly redirect."""
@@ -279,7 +279,7 @@ async def update_channel(
 @router.post("/{channel_id}/sync", response_model=ChannelSyncResponse)
 async def sync_channel(
     channel_id: UUID,
-    _user = Depends(require_permission(Permission.CHANNEL_WRITE)),
+    user=Depends(require_permission(Permission.CHANNEL_WRITE)),
     db = Depends(get_db)
 ):
     """Manually sync channel"""
@@ -297,7 +297,7 @@ async def sync_channel(
 @router.delete("/{channel_id}")
 async def delete_channel(
     channel_id: UUID,
-    _user = Depends(require_permission(Permission.CHANNEL_DELETE)),
+    user=Depends(require_permission(Permission.CHANNEL_DELETE)),
     db = Depends(get_db)
 ):
     """Delete channel"""
@@ -322,7 +322,7 @@ async def channel_videos_partial(
     channel_id: UUID,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    _user = Depends(get_current_user),
+    user=Depends(get_current_user),
     db = Depends(get_db),
 ):
     """Get channel videos as HTML partial."""
@@ -364,7 +364,7 @@ async def channel_ideas_partial(
     channel_id: UUID,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    _user = Depends(get_current_user),
+    user=Depends(get_current_user),
     db = Depends(get_db),
 ):
     """Get channel ideas as HTML partial."""
@@ -407,7 +407,7 @@ async def channel_ideas_partial(
 async def channel_card_partial(
     request: Request,
     channel_id: UUID,
-    _user = Depends(get_current_user),
+    user=Depends(get_current_user),
     db = Depends(get_db)
 ):
     """Get channel card HTML partial for HTMX updates"""
