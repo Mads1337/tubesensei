@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query, Request, HTTPException, Form
-from fastapi.responses import HTMLResponse, JSONResponse
-from typing import Optional, Dict
+from fastapi.responses import HTMLResponse
+from typing import Any, Optional, Dict
 from uuid import UUID
 import re
 
@@ -8,13 +8,7 @@ from app.core.auth import get_current_user
 from app.core.permissions import require_permission, Permission
 from app.services.channel_service import ChannelService
 from app.core.exceptions import NotFoundException, ValidationException
-from app.schemas.channel import (
-    ChannelCreate, 
-    ChannelUpdate, 
-    ChannelResponse,
-    ChannelListResponse,
-    ChannelSyncResponse
-)
+from app.schemas.channel import ChannelSyncResponse
 from app.database import get_db
 from app.core.config import settings
 from fastapi.templating import Jinja2Templates
@@ -86,7 +80,7 @@ async def channels_page(
 @router.get("/validate-url")
 async def validate_channel_url(
     url: str = Query(..., description="YouTube channel URL to validate"),
-    user = Depends(get_current_user)
+    _user = Depends(get_current_user)
 ):
     """Validate YouTube channel URL for HTMX"""
     if not url:
@@ -131,9 +125,9 @@ async def add_channel_form(
 @router.post("/add")
 async def add_channel(
     url: Optional[str] = Form(None, description="YouTube channel URL"),
-    name: Optional[str] = Form(None, description="Channel name (optional)"),
-    description: Optional[str] = Form(None, description="Channel description (optional)"),
-    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
+    _name: Optional[str] = Form(None, description="Channel name (optional)"),
+    _description: Optional[str] = Form(None, description="Channel description (optional)"),
+    _user = Depends(require_permission(Permission.CHANNEL_WRITE)),
     db = Depends(get_db)
 ):
     """Add new channel"""
@@ -153,8 +147,8 @@ async def add_channel(
             "processing_config": {}
         }
         
-        channel = await service.add_channel(channel_data)
-        
+        await service.add_channel(channel_data)
+
         # Return HTMX-friendly response (empty HTML with redirect header)
         return HTMLResponse(
             content="",
@@ -245,19 +239,37 @@ async def edit_channel_form(
         raise HTTPException(status_code=404, detail="Channel not found")
 
 
-@router.patch("/{channel_id}", response_model=ChannelResponse)
+@router.patch("/{channel_id}", response_class=HTMLResponse)
 async def update_channel(
     channel_id: UUID,
-    data: ChannelUpdate,
-    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
+    status: Optional[str] = Form(None),
+    sync_frequency: Optional[int] = Form(None),
+    _priority: Optional[str] = Form(None),
+    _max_videos: Optional[int] = Form(None),
+    auto_sync: Optional[str] = Form(None),
+    _user = Depends(require_permission(Permission.CHANNEL_WRITE)),
     db = Depends(get_db)
 ):
-    """Update channel"""
+    """Update channel — accepts form data and returns an HTMX-friendly redirect."""
     service = ChannelService(db)
-    
+
+    # Map form fields to ChannelUpdate-compatible dict (only include submitted fields)
+    update_data: Dict[str, Any] = {}
+    if status is not None:
+        update_data["status"] = status
+    if sync_frequency is not None:
+        update_data["check_frequency_hours"] = sync_frequency
+        # auto_sync checkbox is only meaningful in the full edit form submission,
+        # which always includes sync_frequency. Absent checkbox = False.
+        update_data["auto_process"] = auto_sync is not None
+
     try:
-        channel = await service.update_channel(str(channel_id), data.dict(exclude_unset=True))
-        return ChannelResponse.from_orm(channel)
+        await service.update_channel(str(channel_id), update_data)
+        return HTMLResponse(
+            content="",
+            status_code=200,
+            headers={"HX-Redirect": f"/admin/channels/{channel_id}"},
+        )
     except NotFoundException:
         raise HTTPException(status_code=404, detail="Channel not found")
     except Exception as e:
@@ -267,7 +279,7 @@ async def update_channel(
 @router.post("/{channel_id}/sync", response_model=ChannelSyncResponse)
 async def sync_channel(
     channel_id: UUID,
-    user = Depends(require_permission(Permission.CHANNEL_WRITE)),
+    _user = Depends(require_permission(Permission.CHANNEL_WRITE)),
     db = Depends(get_db)
 ):
     """Manually sync channel"""
@@ -285,7 +297,7 @@ async def sync_channel(
 @router.delete("/{channel_id}")
 async def delete_channel(
     channel_id: UUID,
-    user = Depends(require_permission(Permission.CHANNEL_DELETE)),
+    _user = Depends(require_permission(Permission.CHANNEL_DELETE)),
     db = Depends(get_db)
 ):
     """Delete channel"""
@@ -310,12 +322,11 @@ async def channel_videos_partial(
     channel_id: UUID,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    user = Depends(get_current_user),
+    _user = Depends(get_current_user),
     db = Depends(get_db),
 ):
     """Get channel videos as HTML partial."""
     from sqlalchemy import select
-    from sqlalchemy.ext.asyncio import AsyncSession
     from app.models.video import Video
 
     service = ChannelService(db)
@@ -353,12 +364,11 @@ async def channel_ideas_partial(
     channel_id: UUID,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    user = Depends(get_current_user),
+    _user = Depends(get_current_user),
     db = Depends(get_db),
 ):
     """Get channel ideas as HTML partial."""
     from sqlalchemy import select
-    from sqlalchemy.ext.asyncio import AsyncSession
     from app.models.video import Video
     from app.models.idea import Idea
 
@@ -397,7 +407,7 @@ async def channel_ideas_partial(
 async def channel_card_partial(
     request: Request,
     channel_id: UUID,
-    user = Depends(get_current_user),
+    _user = Depends(get_current_user),
     db = Depends(get_db)
 ):
     """Get channel card HTML partial for HTMX updates"""

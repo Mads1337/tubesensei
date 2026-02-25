@@ -88,7 +88,7 @@
 
     <!-- Filters -->
     <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-6">
-        <form class="flex gap-4" hx-get="/admin/topic-campaigns" hx-target="#campaigns-list" hx-swap="innerHTML">
+        <form class="flex gap-4" hx-get="/admin/topic-campaigns/" hx-target="#campaigns-list" hx-swap="innerHTML">
             <div class="flex-1">
                 <input
                     type="text"
@@ -96,7 +96,7 @@
                     placeholder="Search campaigns..."
                     value="{{ filters.search or '' }}"
                     class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                    hx-get="/admin/topic-campaigns"
+                    hx-get="/admin/topic-campaigns/"
                     hx-trigger="keyup changed delay:500ms"
                     hx-target="#campaigns-list"
                     hx-swap="innerHTML"
@@ -105,7 +105,7 @@
             <select
                 name="status"
                 class="block px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                hx-get="/admin/topic-campaigns"
+                hx-get="/admin/topic-campaigns/"
                 hx-trigger="change"
                 hx-target="#campaigns-list"
                 hx-swap="innerHTML"

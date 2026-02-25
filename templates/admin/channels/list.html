@@ -270,7 +270,7 @@
 // Auto-refresh channels periodically
 setInterval(function() {
     if (!document.hidden) {
-        htmx.trigger('#channels-grid', 'refresh');
+        htmx.ajax('GET', '/admin/channels/', {target: '#channels-grid', swap: 'innerHTML'});
     }
 }, 30000); // Refresh every 30 seconds
 </script>

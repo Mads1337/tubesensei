@@ -307,22 +307,39 @@
                 <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                     <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-4">Quick Actions</h4>
                     <div class="grid grid-cols-2 gap-4">
-                        <button class="text-left p-3 bg-white dark:bg-gray-600 rounded border hover:bg-gray-50 dark:hover:bg-gray-500">
+                        <button
+                            class="text-left p-3 bg-white dark:bg-gray-600 rounded border hover:bg-gray-50 dark:hover:bg-gray-500"
+                            hx-patch="/admin/channels/{{ channel.id }}"
+                            hx-vals='{"status": "paused"}'
+                            hx-confirm="Pause monitoring for this channel?"
+                        >
                             <i class="fas fa-pause text-yellow-600 mr-2"></i>
                             <span class="text-sm">Pause Monitoring</span>
                         </button>
-                        <button class="text-left p-3 bg-white dark:bg-gray-600 rounded border hover:bg-gray-50 dark:hover:bg-gray-500">
+                        <button
+                            class="text-left p-3 bg-white dark:bg-gray-600 rounded border hover:bg-gray-50 dark:hover:bg-gray-500"
+                            hx-post="/admin/channels/{{ channel.id }}/sync"
+                            hx-target="#sync-status"
+                            hx-swap="innerHTML"
+                        >
                             <i class="fas fa-sync-alt text-blue-600 mr-2"></i>
                             <span class="text-sm">Force Full Sync</span>
                         </button>
-                        <button class="text-left p-3 bg-white dark:bg-gray-600 rounded border hover:bg-gray-50 dark:hover:bg-gray-500">
+                        <button
+                            class="text-left p-3 bg-white dark:bg-gray-600 rounded border opacity-50 cursor-not-allowed"
+                            disabled
+                            title="Idea generation is available through topic campaigns"
+                        >
                             <i class="fas fa-robot text-purple-600 mr-2"></i>
                             <span class="text-sm">Generate New Ideas</span>
                         </button>
-                        <button class="text-left p-3 bg-white dark:bg-gray-600 rounded border hover:bg-gray-50 dark:hover:bg-gray-500 text-red-600">
+                        <a
+                            href="/admin/channels/{{ channel.id }}/edit"
+                            class="text-left p-3 bg-white dark:bg-gray-600 rounded border hover:bg-gray-50 dark:hover:bg-gray-500 text-red-600"
+                        >
                             <i class="fas fa-trash mr-2"></i>
                             <span class="text-sm">Delete Channel</span>
-                        </button>
+                        </a>
                     </div>
                 </div>
 
