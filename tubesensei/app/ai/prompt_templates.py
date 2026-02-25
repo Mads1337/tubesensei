@@ -120,7 +120,33 @@ For each identified idea, provide:
 6. Estimated complexity (1-10 scale)
 7. Approximate timestamp or section where mentioned
 
-Respond in JSON format:
+Here are two examples of well-extracted ideas:
+
+Example 1 - High confidence SaaS idea:
+{{
+    "title": "AI-Powered Invoice Reconciliation Tool",
+    "description": "A SaaS platform that uses machine learning to automatically match invoices with purchase orders and bank statements, reducing manual accounting work by 80%. Integrates with QuickBooks, Xero, and SAP.",
+    "category": "SaaS",
+    "target_market": "SMBs and accounting departments at mid-market companies",
+    "value_proposition": "Eliminates 10+ hours/week of manual reconciliation work per accountant",
+    "complexity_score": 6,
+    "confidence": 0.9,
+    "source_context": "The host says: 'we spent 3 weeks building an invoice matcher and our clients saved 80% of their reconciliation time'"
+}}
+
+Example 2 - Medium confidence service idea:
+{{
+    "title": "Remote Podcast Production Service",
+    "description": "Done-for-you podcast production service handling recording setup guidance, audio editing, show notes, and distribution for busy entrepreneurs. Monthly subscription model.",
+    "category": "Service",
+    "target_market": "Entrepreneurs and executives who want a podcast but lack time for production",
+    "value_proposition": "Launch and maintain a professional podcast without learning audio editing",
+    "complexity_score": 3,
+    "confidence": 0.75,
+    "source_context": "Mentioned while discussing content marketing: 'podcasting is huge but nobody wants to edit audio'"
+}}
+
+Now extract all ideas from the transcript above. Respond in JSON format:
 {{
     "ideas": [
         {{
@@ -129,13 +155,13 @@ Respond in JSON format:
             "category": "Category",
             "target_market": "Target audience",
             "value_proposition": "Key value",
-            "complexity_score": 1-10,
-            "confidence": 0.0-1.0,
+            "complexity_score": 1,
+            "confidence": 0.0,
             "source_context": "Quote or context from transcript"
         }}
     ],
     "summary": "Brief summary of all ideas found",
-    "total_ideas": number
+    "total_ideas": 0
 }}
 """,
 

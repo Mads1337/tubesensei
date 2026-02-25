@@ -43,7 +43,14 @@ class Idea(BaseModel):
         Text,
         nullable=False
     )
-    
+
+    content_hash = Column(
+        String(64),
+        nullable=True,
+        index=True,
+        comment="SHA-256 hash of title+description for deduplication"
+    )
+
     category = Column(
         String(100),
         nullable=True,

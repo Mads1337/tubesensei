@@ -4,7 +4,7 @@ CampaignVideo model - Junction table linking campaigns to discovered videos.
 Tracks which videos were discovered by which campaign, how they were found,
 and their AI-determined topic relevance.
 """
-from sqlalchemy import Column, String, Integer, DateTime, Enum as SQLEnum, Index, Float, Boolean, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, Integer, Text, DateTime, Enum as SQLEnum, Index, Float, Boolean, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 import enum
@@ -146,6 +146,20 @@ class CampaignVideo(BaseModel):
     ideas_extracted_at = Column(
         DateTime(timezone=True),
         nullable=True
+    )
+
+    # Idea extraction error tracking
+    idea_extraction_retry_count = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="Number of times idea extraction has been retried"
+    )
+
+    idea_extraction_last_error = Column(
+        Text,
+        nullable=True,
+        comment="Last error message from idea extraction"
     )
 
     # Discovery depth (for similar videos recursion)

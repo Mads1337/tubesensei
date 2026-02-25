@@ -6,6 +6,7 @@ Runs in a controlled loop similar to TranscriptionAgent to allow
 pausing, resuming, and progress tracking.
 """
 import asyncio
+import hashlib
 import logging
 from typing import Dict, Any, List, Optional
 
@@ -19,7 +20,7 @@ from app.models.video import Video
 from app.models.idea import Idea, IdeaStatus, IdeaPriority
 from app.ai.llm_manager import LLMManager, ModelType
 from app.ai.prompt_templates import PromptTemplates, PromptType
-from app.ai.response_parser import ResponseParser
+from app.ai.response_parser import ResponseParser, ParsedQualityAssessment
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +96,9 @@ class IdeaExtractionAgent(BaseAgent):
                     logger.error(f"Error extracting ideas for video {cv.video_id}: {e}")
                     processed_count += 1
                     failed_count += 1
-                    # Mark as extracted to prevent retry loop
-                    cv.mark_ideas_extracted()
+                    # Do NOT mark as extracted - allow retry
+                    cv.idea_extraction_retry_count = cv.idea_extraction_retry_count + 1  # type: ignore[assignment]
+                    cv.idea_extraction_last_error = str(e)[:500]  # type: ignore[assignment]
                     self.add_error(f"Video {cv.video_id}: {str(e)[:200]}")
 
             # Update progress
@@ -181,10 +183,46 @@ class IdeaExtractionAgent(BaseAgent):
             )
             all_ideas.extend(ideas)
 
-        # Save ideas to DB
+        # Filter by confidence threshold from campaign config
+        confidence_threshold = self.context.campaign.idea_confidence_threshold
+        if confidence_threshold > 0:
+            before = len(all_ideas)
+            all_ideas = [i for i in all_ideas if i.confidence >= confidence_threshold]
+            filtered = before - len(all_ideas)
+            if filtered > 0:
+                logger.debug(f"Filtered {filtered} low-confidence ideas (threshold={confidence_threshold})")
+
+        # Save ideas to DB (deduplicate by content_hash within this video)
         saved_count = 0
+        seen_hashes: set = set()
         for idea_data in all_ideas:
             try:
+                # Compute content hash for deduplication
+                hash_input = f"{idea_data.title.strip().lower()}|{idea_data.description.strip().lower()}"
+                content_hash = hashlib.sha256(hash_input.encode()).hexdigest()[:64]
+                if content_hash in seen_hashes:
+                    continue
+                seen_hashes.add(content_hash)
+
+                # Enrich with quality assessment and categorization
+                quality = await self._call_quality_assessment(idea_data, video)
+                categorization = await self._call_idea_categorization(idea_data, video)
+
+                extraction_metadata: Dict[str, Any] = {
+                    "campaign_id": str(self.campaign_id),
+                    "value_proposition": idea_data.value_proposition,
+                    "transcript_word_count": word_count,
+                }
+                if quality:
+                    extraction_metadata["quality_assessment"] = {
+                        "viability_scores": quality.viability_scores,
+                        "strengths": quality.strengths,
+                        "weaknesses": quality.weaknesses,
+                        "overall_recommendation": quality.recommendations[:1][0] if quality.recommendations else None,
+                    }
+                if categorization:
+                    extraction_metadata["categorization"] = categorization
+
                 idea = Idea(
                     video_id=video.id,
                     title=idea_data.title,
@@ -192,15 +230,16 @@ class IdeaExtractionAgent(BaseAgent):
                     category=idea_data.category,
                     status=IdeaStatus.EXTRACTED,
                     priority=IdeaPriority.MEDIUM,
-                    confidence_score=idea_data.confidence,
+                    confidence_score=quality.quality_score if quality else idea_data.confidence,
                     complexity_score=idea_data.complexity_score,
                     target_audience=idea_data.target_market,
                     source_context=idea_data.source_context,
-                    extraction_metadata={
-                        "campaign_id": str(self.campaign_id),
-                        "value_proposition": idea_data.value_proposition,
-                        "transcript_word_count": word_count,
-                    },
+                    content_hash=content_hash,
+                    market_size_estimate=(str(categorization.get("market_size", ""))[:50] or None) if categorization else None,
+                    implementation_time_estimate=(str(categorization.get("time_to_market", ""))[:50] or None) if categorization else None,
+                    technologies=[str(s)[:100] for s in (categorization.get("required_skills") or []) if s][:10] if categorization else [],
+                    potential_challenges=quality.recommendations if quality else [],
+                    extraction_metadata=extraction_metadata,
                 )
                 self.db.add(idea)
                 saved_count += 1
@@ -266,6 +305,7 @@ class IdeaExtractionAgent(BaseAgent):
                 CampaignVideo.is_topic_relevant == True,
                 CampaignVideo.transcript_extracted == True,
                 CampaignVideo.ideas_extracted == False,
+                CampaignVideo.idea_extraction_retry_count < 3,
             )
             .limit(limit)
         )
@@ -282,6 +322,7 @@ class IdeaExtractionAgent(BaseAgent):
                 CampaignVideo.is_topic_relevant == True,
                 CampaignVideo.transcript_extracted == True,
                 CampaignVideo.ideas_extracted == False,
+                CampaignVideo.idea_extraction_retry_count < 3,
             )
         )
         result = await self.db.execute(query)
@@ -302,11 +343,100 @@ class IdeaExtractionAgent(BaseAgent):
         return result.scalar() or 0
 
     @staticmethod
-    def _chunk_transcript(text: str, max_words: int) -> List[str]:
-        """Split transcript into chunks of approximately max_words each."""
-        words = text.split()
+    def _chunk_transcript(text: str, max_words: int, overlap_words: int = 200) -> List[str]:
+        """Split transcript into overlapping chunks preferring sentence boundaries."""
+        import re
+        # Split into sentences first
+        sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+
         chunks = []
-        for i in range(0, len(words), max_words):
-            chunk = " ".join(words[i:i + max_words])
-            chunks.append(chunk)
-        return chunks
+        current_words: List[str] = []
+        current_word_count = 0
+
+        for sentence in sentences:
+            sentence_words = sentence.split()
+            sentence_word_count = len(sentence_words)
+
+            # If adding this sentence would exceed the limit, flush the chunk
+            if current_word_count + sentence_word_count > max_words and current_words:
+                chunks.append(" ".join(current_words))
+                # Keep the last overlap_words words for context
+                overlap_start = max(0, len(current_words) - overlap_words)
+                current_words = current_words[overlap_start:]
+                current_word_count = len(current_words)
+
+            current_words.extend(sentence_words)
+            current_word_count += sentence_word_count
+
+        if current_words:
+            chunks.append(" ".join(current_words))
+
+        return chunks if chunks else [text]
+
+    async def _call_quality_assessment(
+        self,
+        idea_data,
+        video: Video,
+    ) -> Optional[ParsedQualityAssessment]:
+        """Call QUALITY_ASSESSMENT prompt and return parsed result."""
+        system_prompt, user_prompt = PromptTemplates.get_prompt(
+            PromptType.QUALITY_ASSESSMENT,
+            variables={
+                "title": idea_data.title,
+                "description": idea_data.description,
+                "category": idea_data.category or "Unknown",
+                "source_context": idea_data.source_context or "",
+            },
+        )
+        try:
+            response = await self.llm_manager.generate(
+                prompt=user_prompt,
+                model_type=ModelType.BALANCED,
+                system_prompt=system_prompt or "",
+                temperature=0.3,
+                max_tokens=1500,
+            )
+            self.increment_llm_calls(
+                count=1,
+                tokens=response.get("usage", {}).get("total_tokens", 0),
+                cost=float(response.get("cost", 0)),
+            )
+            return ResponseParser.parse_quality_assessment_response(response.get("content", ""))
+        except Exception as e:
+            logger.warning(f"Quality assessment failed for '{idea_data.title}': {e}")
+            return None
+
+    async def _call_idea_categorization(
+        self,
+        idea_data,
+        video: Video,
+    ) -> Optional[Dict[str, Any]]:
+        """Call IDEA_CATEGORIZATION prompt and return parsed result."""
+        system_prompt, user_prompt = PromptTemplates.get_prompt(
+            PromptType.IDEA_CATEGORIZATION,
+            variables={
+                "title": idea_data.title,
+                "description": idea_data.description,
+                "video_title": video.title or "Unknown",
+            },
+        )
+        try:
+            response = await self.llm_manager.generate(
+                prompt=user_prompt,
+                model_type=ModelType.BALANCED,
+                system_prompt=system_prompt or "",
+                temperature=0.3,
+                max_tokens=1000,
+            )
+            self.increment_llm_calls(
+                count=1,
+                tokens=response.get("usage", {}).get("total_tokens", 0),
+                cost=float(response.get("cost", 0)),
+            )
+            return ResponseParser.parse_json_response(
+                response.get("content", ""),
+                required_fields=["industry"],
+            )
+        except Exception as e:
+            logger.warning(f"Idea categorization failed for '{idea_data.title}': {e}")
+            return None
