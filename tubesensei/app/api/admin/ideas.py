@@ -1,6 +1,6 @@
 """Admin Ideas API router module."""
 
-from fastapi import APIRouter, Depends, Query, Request, HTTPException
+from fastapi import APIRouter, Depends, Query, Request, HTTPException, Form
 from fastapi.responses import HTMLResponse
 from typing import Optional
 from uuid import UUID
@@ -11,7 +11,9 @@ from app.core.auth import get_current_user
 from app.models.idea import Idea, IdeaStatus, IdeaPriority
 from app.models.video import Video
 from app.models.channel import Channel
+from app.models.investigation_agent import InvestigationAgent
 from app.services.idea_service import IdeaService
+from app.services.investigation_runner import InvestigationRunner
 from app.core.exceptions import NotFoundException
 from app.database import get_db
 from app.core.config import settings
@@ -215,7 +217,7 @@ async def idea_detail(
     user=Depends(get_current_user),
     db=Depends(get_db),
 ):
-    """Render idea detail partial (for HTMX expansion)"""
+    """Render full idea detail page"""
 
     service = IdeaService(db)
     try:
@@ -223,13 +225,119 @@ async def idea_detail(
     except NotFoundException:
         raise HTTPException(status_code=404, detail="Idea not found")
 
+    idea = idea_context["idea"]
+
+    # Normalize enum values to strings (to_dict returns raw enum objects)
+    if idea.get("status") and hasattr(idea["status"], "value"):
+        idea["status"] = idea["status"].value
+    if idea.get("priority") and hasattr(idea["priority"], "value"):
+        idea["priority"] = idea["priority"].value
+
+    # Fetch active investigation agents
+    agents_result = await db.execute(
+        select(InvestigationAgent)
+        .where(InvestigationAgent.is_active == True)
+        .order_by(InvestigationAgent.name)
+    )
+    agents = agents_result.scalars().all()
+
+    # Fetch investigation runs
+    runner = InvestigationRunner(db)
+    runs = await runner.get_runs_for_idea(idea_id)
+
+    # Fetch related ideas if any
+    related_ideas = []
+    if idea.get("related_ideas"):
+        for rid in idea["related_ideas"]:
+            try:
+                related = await service.get_idea(rid)
+                related_ideas.append({
+                    "id": str(related.id),
+                    "title": related.title,
+                    "status": related.status.value if related.status else None,
+                })
+            except NotFoundException:
+                continue
+
     context = get_template_context(
         request,
         user=user,
-        idea=idea_context["idea"],
+        idea=idea,
         video=idea_context["video"],
         channel=idea_context["channel"],
         transcript_excerpt=idea_context.get("transcript_excerpt"),
+        agents=agents,
+        runs=runs,
+        related_ideas=related_ideas,
+        idea_id=str(idea_id),
+        idea_statuses=[s.value for s in IdeaStatus],
     )
 
-    return templates.TemplateResponse("admin/ideas/partials/idea_detail.html", context)
+    return templates.TemplateResponse("admin/ideas/detail.html", context)
+
+
+@router.post("/{idea_id}/status", response_class=HTMLResponse)
+async def update_idea_status(
+    request: Request,
+    idea_id: UUID,
+    status: str = Form(...),
+    review_notes: Optional[str] = Form(None),
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Update idea status via HTMX"""
+    service = IdeaService(db)
+    try:
+        new_status = IdeaStatus(status)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+
+    data = {"status": new_status}
+    if review_notes:
+        data["review_notes"] = review_notes
+
+    try:
+        updated_idea = await service.update_idea(
+            str(idea_id), data, user_id=str(user.id)
+        )
+    except NotFoundException:
+        raise HTTPException(status_code=404, detail="Idea not found")
+
+    idea_dict = updated_idea.to_dict()
+    if idea_dict.get("status") and hasattr(idea_dict["status"], "value"):
+        idea_dict["status"] = idea_dict["status"].value
+    if idea_dict.get("priority") and hasattr(idea_dict["priority"], "value"):
+        idea_dict["priority"] = idea_dict["priority"].value
+
+    context = get_template_context(
+        request,
+        user=user,
+        idea=idea_dict,
+    )
+
+    return templates.TemplateResponse(
+        "admin/ideas/partials/status_sidebar.html", context
+    )
+
+
+@router.post("/{idea_id}/notes", response_class=HTMLResponse)
+async def update_idea_notes(
+    request: Request,
+    idea_id: UUID,
+    review_notes: str = Form(""),
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Update idea review notes via HTMX"""
+    service = IdeaService(db)
+    try:
+        await service.update_idea(
+            str(idea_id), {"review_notes": review_notes}, user_id=str(user.id)
+        )
+    except NotFoundException:
+        raise HTTPException(status_code=404, detail="Idea not found")
+
+    return HTMLResponse(
+        '<span class="text-green-600 dark:text-green-400 text-sm">'
+        '<i class="fas fa-check mr-1"></i>Saved</span>'
+    )

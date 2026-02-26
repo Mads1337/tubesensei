@@ -228,7 +228,7 @@ class IdeaService:
             transcript_result = await self.db.execute(
                 select(Transcript).where(Transcript.video_id == video.id)
             )
-            transcript = transcript_result.scalar_one_or_none()
+            transcript = transcript_result.scalars().first()
 
         return {
             "idea": idea.to_dict(),

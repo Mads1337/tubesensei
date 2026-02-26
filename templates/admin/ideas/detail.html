@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+
+{% block title %}{{ idea.title }} - TubeSensei Admin{% endblock %}
+
+{% block page_title %}Idea Details{% endblock %}
+{% block page_description %}{{ idea.title[:100] }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Back Link -->
+    <div class="mb-4">
+        <a href="/admin/ideas/" class="text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400">
+            <i class="fas fa-arrow-left mr-2"></i>Back to Ideas
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Content -->
+        <div class="lg:col-span-2 space-y-6">
+
+            <!-- Title & Header Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="p-6">
+                    <h1 class="text-xl font-bold text-gray-900 dark:text-white mb-3">
+                        {{ idea.title }}
+                    </h1>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- Status Badge -->
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium
+                            {% if idea.status == 'selected' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                            {% elif idea.status == 'reviewed' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300
+                            {% elif idea.status == 'rejected' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300
+                            {% elif idea.status == 'in_progress' %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300
+                            {% elif idea.status == 'implemented' %}bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300
+                            {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300{% endif %}">
+                            {{ idea.status | replace('_', ' ') | title }}
+                        </span>
+
+                        <!-- Priority Badge -->
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium
+                            {% if idea.priority == 'critical' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300
+                            {% elif idea.priority == 'high' %}bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300
+                            {% elif idea.priority == 'medium' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300
+                            {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300{% endif %}">
+                            <i class="fas fa-flag mr-1"></i>
+                            {{ idea.priority | title }}
+                        </span>
+
+                        <!-- Category -->
+                        {% if idea.category %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300">
+                            <i class="fas fa-tag mr-1"></i>
+                            {{ idea.category }}
+                        </span>
+                        {% endif %}
+
+                        <!-- Confidence Score -->
+                        {% if idea.confidence_score is not none %}
+                        <span class="text-sm {% if idea.confidence_score >= 0.7 %}text-green-600 dark:text-green-400{% elif idea.confidence_score >= 0.4 %}text-yellow-600 dark:text-yellow-400{% else %}text-gray-500{% endif %}">
+                            <i class="fas fa-chart-line mr-1"></i>
+                            {{ "%.0f"|format(idea.confidence_score * 100) }}% confidence
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Description Card -->
+            {% if idea.description %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        <i class="fas fa-align-left text-gray-400 mr-2"></i>Description
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <p class="text-gray-700 dark:text-gray-300 whitespace-pre-line">{{ idea.description }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Analysis Card -->
+            {% if idea.target_audience or idea.market_size_estimate or idea.complexity_score is not none or idea.implementation_time_estimate %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        <i class="fas fa-chart-bar text-gray-400 mr-2"></i>Analysis
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {% if idea.target_audience %}
+                        <div>
+                            <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Target Audience</h5>
+                            <p class="text-sm text-gray-700 dark:text-gray-300">{{ idea.target_audience }}</p>
+                        </div>
+                        {% endif %}
+
+                        {% if idea.market_size_estimate %}
+                        <div>
+                            <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Market Size</h5>
+                            <p class="text-sm text-gray-700 dark:text-gray-300">{{ idea.market_size_estimate }}</p>
+                        </div>
+                        {% endif %}
+
+                        {% if idea.complexity_score is not none %}
+                        <div>
+                            <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Complexity</h5>
+                            <div class="flex items-center gap-1">
+                                {% for i in range(10) %}
+                                <div class="w-2 h-4 rounded-sm {% if i < idea.complexity_score %}bg-primary-500{% else %}bg-gray-200 dark:bg-gray-600{% endif %}"></div>
+                                {% endfor %}
+                                <span class="text-xs text-gray-500 ml-1">{{ idea.complexity_score }}/10</span>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if idea.implementation_time_estimate %}
+                        <div>
+                            <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Est. Time</h5>
+                            <p class="text-sm text-gray-700 dark:text-gray-300">{{ idea.implementation_time_estimate }}</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Technologies & Tags Card -->
+            {% if idea.technologies or idea.tags %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        <i class="fas fa-code text-gray-400 mr-2"></i>Technologies & Tags
+                    </h2>
+                </div>
+                <div class="p-6 space-y-4">
+                    {% if idea.technologies %}
+                    <div>
+                        <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Technologies</h5>
+                        <div class="flex flex-wrap gap-1">
+                            {% for tech in idea.technologies %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                                {{ tech }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if idea.tags %}
+                    <div>
+                        <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Tags</h5>
+                        <div class="flex flex-wrap gap-1">
+                            {% for tag in idea.tags %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300">
+                                {{ tag }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Competitive Advantage Card -->
+            {% if idea.competitive_advantage %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        <i class="fas fa-trophy text-gray-400 mr-2"></i>Competitive Advantage
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <p class="text-gray-700 dark:text-gray-300">{{ idea.competitive_advantage }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Challenges & Monetization Cards -->
+            {% if idea.potential_challenges or idea.monetization_strategies %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {% if idea.potential_challenges %}
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                            <i class="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>Challenges
+                        </h2>
+                    </div>
+                    <div class="p-6">
+                        <ul class="list-disc list-inside text-sm text-gray-700 dark:text-gray-300 space-y-1">
+                            {% for challenge in idea.potential_challenges %}
+                            <li>{% if challenge is mapping %}{{ challenge.description or challenge.name or challenge }}{% else %}{{ challenge }}{% endif %}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if idea.monetization_strategies %}
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                            <i class="fas fa-dollar-sign text-green-500 mr-2"></i>Monetization
+                        </h2>
+                    </div>
+                    <div class="p-6">
+                        <ul class="list-disc list-inside text-sm text-gray-700 dark:text-gray-300 space-y-1">
+                            {% for strategy in idea.monetization_strategies %}
+                            <li>{% if strategy is mapping %}{{ strategy.description or strategy.name or strategy }}{% else %}{{ strategy }}{% endif %}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Source Context Card -->
+            {% if idea.source_context or transcript_excerpt %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        <i class="fas fa-quote-left text-gray-400 mr-2"></i>Source Context
+                    </h2>
+                </div>
+                <div class="p-6 space-y-4">
+                    {% if idea.source_context %}
+                    <blockquote class="text-sm text-gray-600 dark:text-gray-400 italic bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border-l-4 border-primary-500">
+                        "{{ idea.source_context }}"
+                    </blockquote>
+                    {% endif %}
+
+                    {% if transcript_excerpt %}
+                    <div>
+                        <h5 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Transcript Excerpt</h5>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg max-h-48 overflow-y-auto">
+                            {{ transcript_excerpt }}
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Investigations Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        <i class="fas fa-search-plus text-gray-400 mr-2"></i>Investigations
+                    </h2>
+                </div>
+                <div class="p-6">
+                    {% include "admin/ideas/partials/investigation_section.html" %}
+                </div>
+            </div>
+
+            <!-- Related Ideas Card -->
+            {% if related_ideas %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        <i class="fas fa-link text-gray-400 mr-2"></i>Related Ideas
+                    </h2>
+                </div>
+                <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for related in related_ideas %}
+                    <a href="/admin/ideas/{{ related.id }}" class="block p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-medium text-gray-900 dark:text-white hover:text-primary-600 dark:hover:text-primary-400">
+                                {{ related.title }}
+                            </span>
+                            {% if related.status %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                                {% if related.status == 'selected' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300
+                                {% elif related.status == 'reviewed' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300
+                                {% elif related.status == 'rejected' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300
+                                {% elif related.status == 'in_progress' %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300
+                                {% elif related.status == 'implemented' %}bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300
+                                {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300{% endif %}">
+                                {{ related.status | replace('_', ' ') | title }}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Status & Actions -->
+            {% include "admin/ideas/partials/status_sidebar.html" %}
+
+            <!-- Scores Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Scores</h2>
+                </div>
+                <div class="p-6 space-y-4">
+                    {% if idea.confidence_score is not none %}
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-gray-600 dark:text-gray-400 text-sm">Confidence</span>
+                            <span class="text-sm font-medium text-gray-900 dark:text-white">{{ "%.0f"|format(idea.confidence_score * 100) }}%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                            <div class="h-2 rounded-full {% if idea.confidence_score >= 0.7 %}bg-green-500{% elif idea.confidence_score >= 0.4 %}bg-yellow-500{% else %}bg-red-500{% endif %}"
+                                 style="width: {{ "%.0f"|format(idea.confidence_score * 100) }}%"></div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if idea.complexity_score is not none %}
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-gray-600 dark:text-gray-400 text-sm">Complexity</span>
+                            <span class="text-sm font-medium text-gray-900 dark:text-white">{{ idea.complexity_score }}/10</span>
+                        </div>
+                        <div class="flex items-center gap-0.5">
+                            {% for i in range(10) %}
+                            <div class="flex-1 h-2 rounded-sm {% if i < idea.complexity_score %}bg-primary-500{% else %}bg-gray-200 dark:bg-gray-600{% endif %}"></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Source Video Card -->
+            {% if video %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Source Video</h2>
+                </div>
+                <div class="p-6 space-y-3">
+                    {% if video.id %}
+                    <a href="/admin/videos/{{ video.id }}"
+                       class="text-sm font-medium text-gray-900 dark:text-white hover:text-primary-600 dark:hover:text-primary-400 block">
+                        <i class="fas fa-video text-gray-400 mr-1"></i>
+                        {{ video.title }}
+                    </a>
+                    {% endif %}
+
+                    {% if channel and channel.name %}
+                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                        <i class="fas fa-tv mr-1"></i>
+                        {% if channel.id %}
+                        <a href="/admin/channels/{{ channel.id }}" class="hover:text-primary-600 dark:hover:text-primary-400">{{ channel.name }}</a>
+                        {% else %}
+                        {{ channel.name }}
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if video.url %}
+                    <a href="{{ video.url }}" target="_blank"
+                       class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 mt-2">
+                        <i class="fab fa-youtube mr-2"></i>
+                        Watch on YouTube
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Metadata Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Metadata</h2>
+                </div>
+                <div class="p-6 space-y-3">
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-gray-600 dark:text-gray-400">Created</span>
+                        <span class="text-gray-900 dark:text-white">{{ idea.created_at.strftime('%b %d, %Y') if idea.created_at and idea.created_at is not string else idea.created_at or 'N/A' }}</span>
+                    </div>
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-gray-600 dark:text-gray-400">Updated</span>
+                        <span class="text-gray-900 dark:text-white">{{ idea.updated_at.strftime('%b %d, %Y') if idea.updated_at and idea.updated_at is not string else idea.updated_at or 'N/A' }}</span>
+                    </div>
+                    {% if idea.source_timestamp is not none %}
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-gray-600 dark:text-gray-400">Source Timestamp</span>
+                        <span class="text-gray-900 dark:text-white">{{ idea.source_timestamp }}s</span>
+                    </div>
+                    {% endif %}
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-gray-600 dark:text-gray-400">Export Count</span>
+                        <span class="text-gray-900 dark:text-white">{{ idea.export_count or 0 }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Review Notes Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Review Notes</h2>
+                </div>
+                <div class="p-6">
+                    <form hx-post="/admin/ideas/{{ idea.id }}/notes"
+                          hx-target="#notes-save-indicator"
+                          hx-swap="innerHTML">
+                        <textarea name="review_notes"
+                                  rows="4"
+                                  class="block w-full text-sm px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-primary-500 focus:border-primary-500"
+                                  placeholder="Add review notes...">{{ idea.review_notes or '' }}</textarea>
+                        <div class="mt-2 flex items-center justify-between">
+                            <button type="submit"
+                                    class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
+                                <i class="fas fa-save mr-1"></i> Save Notes
+                            </button>
+                            <div id="notes-save-indicator"></div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
