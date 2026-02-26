@@ -19,21 +19,28 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        'webhooks',
-        sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False, server_default=sa.text('gen_random_uuid()')),
-        sa.Column('name', sa.String(255), nullable=False),
-        sa.Column('url', sa.String(500), nullable=False),
-        sa.Column('secret', sa.String(255), nullable=True),
-        sa.Column('events', postgresql.ARRAY(sa.String()), nullable=False, server_default='{}'),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
-        sa.Column('last_triggered_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('failure_count', sa.Integer(), nullable=False, server_default='0'),
-        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
-        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('idx_webhook_active_events', 'webhooks', ['is_active'])
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    if 'webhooks' not in inspector.get_table_names():
+        op.create_table(
+            'webhooks',
+            sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False, server_default=sa.text('gen_random_uuid()')),
+            sa.Column('name', sa.String(255), nullable=False),
+            sa.Column('url', sa.String(500), nullable=False),
+            sa.Column('secret', sa.String(255), nullable=True),
+            sa.Column('events', postgresql.ARRAY(sa.String()), nullable=False, server_default='{}'),
+            sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
+            sa.Column('last_triggered_at', sa.DateTime(timezone=True), nullable=True),
+            sa.Column('failure_count', sa.Integer(), nullable=False, server_default='0'),
+            sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
+            sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
+            sa.PrimaryKeyConstraint('id'),
+        )
+
+    indexes = [idx['name'] for idx in inspector.get_indexes('webhooks')] if 'webhooks' in inspector.get_table_names() else []
+    if 'idx_webhook_active_events' not in indexes:
+        op.create_index('idx_webhook_active_events', 'webhooks', ['is_active'])
 
 
 def downgrade() -> None:

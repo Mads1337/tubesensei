@@ -19,17 +19,27 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
     # Add content_hash to ideas for deduplication
-    op.add_column('ideas', sa.Column('content_hash', sa.String(64), nullable=True))
-    op.create_index('idx_idea_content_hash', 'ideas', ['content_hash'])
+    idea_cols = [c['name'] for c in inspector.get_columns('ideas')]
+    if 'content_hash' not in idea_cols:
+        op.add_column('ideas', sa.Column('content_hash', sa.String(64), nullable=True))
+    indexes = [idx['name'] for idx in inspector.get_indexes('ideas')]
+    if 'idx_idea_content_hash' not in indexes:
+        op.create_index('idx_idea_content_hash', 'ideas', ['content_hash'])
 
     # Add error tracking columns to campaign_videos
-    op.add_column('campaign_videos', sa.Column(
-        'idea_extraction_retry_count', sa.Integer(), nullable=False, server_default='0'
-    ))
-    op.add_column('campaign_videos', sa.Column(
-        'idea_extraction_last_error', sa.Text(), nullable=True
-    ))
+    cv_cols = [c['name'] for c in inspector.get_columns('campaign_videos')]
+    if 'idea_extraction_retry_count' not in cv_cols:
+        op.add_column('campaign_videos', sa.Column(
+            'idea_extraction_retry_count', sa.Integer(), nullable=False, server_default='0'
+        ))
+    if 'idea_extraction_last_error' not in cv_cols:
+        op.add_column('campaign_videos', sa.Column(
+            'idea_extraction_last_error', sa.Text(), nullable=True
+        ))
 
 
 def downgrade() -> None:

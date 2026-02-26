@@ -21,21 +21,27 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema - add investigation_agents table."""
-    op.create_table(
-        'investigation_agents',
-        sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column('name', sa.String(length=200), nullable=False),
-        sa.Column('description', sa.Text(), nullable=True),
-        sa.Column('system_prompt', sa.Text(), nullable=False),
-        sa.Column('user_prompt_template', sa.Text(), nullable=False),
-        sa.Column('config', postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default='{}'),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
-        sa.PrimaryKeyConstraint('id')
-    )
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
 
-    op.create_index('idx_investigation_agent_is_active', 'investigation_agents', ['is_active'], unique=False)
+    if 'investigation_agents' not in inspector.get_table_names():
+        op.create_table(
+            'investigation_agents',
+            sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            sa.Column('name', sa.String(length=200), nullable=False),
+            sa.Column('description', sa.Text(), nullable=True),
+            sa.Column('system_prompt', sa.Text(), nullable=False),
+            sa.Column('user_prompt_template', sa.Text(), nullable=False),
+            sa.Column('config', postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default='{}'),
+            sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
+            sa.PrimaryKeyConstraint('id')
+        )
+
+    indexes = [idx['name'] for idx in inspector.get_indexes('investigation_agents')] if 'investigation_agents' in inspector.get_table_names() else []
+    if 'idx_investigation_agent_is_active' not in indexes:
+        op.create_index('idx_investigation_agent_is_active', 'investigation_agents', ['is_active'], unique=False)
 
 
 def downgrade() -> None:

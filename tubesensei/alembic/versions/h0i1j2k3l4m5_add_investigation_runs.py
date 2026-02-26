@@ -20,6 +20,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
     # Create investigationrunstatus enum
     op.execute("""
         DO $$ BEGIN
@@ -30,34 +33,40 @@ def upgrade() -> None:
     """)
 
     # Create investigation_runs table
-    op.create_table(
-        'investigation_runs',
-        sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('agent_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('idea_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column(
-            'status',
-            sa.Enum('pending', 'running', 'completed', 'failed', name='investigationrunstatus'),
-            nullable=False,
-            server_default='pending',
-        ),
-        sa.Column('result', sa.Text(), nullable=True),
-        sa.Column('result_structured', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column('tokens_used', sa.Integer(), nullable=True),
-        sa.Column('estimated_cost_usd', sa.Float(), nullable=True),
-        sa.Column('error_message', sa.Text(), nullable=True),
-        sa.ForeignKeyConstraint(['agent_id'], ['investigation_agents.id'], ondelete='CASCADE'),
-        sa.ForeignKeyConstraint(['idea_id'], ['ideas.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-    )
+    if 'investigation_runs' not in inspector.get_table_names():
+        op.create_table(
+            'investigation_runs',
+            sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+            sa.Column('agent_id', postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column('idea_id', postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column(
+                'status',
+                sa.Enum('pending', 'running', 'completed', 'failed', name='investigationrunstatus'),
+                nullable=False,
+                server_default='pending',
+            ),
+            sa.Column('result', sa.Text(), nullable=True),
+            sa.Column('result_structured', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+            sa.Column('tokens_used', sa.Integer(), nullable=True),
+            sa.Column('estimated_cost_usd', sa.Float(), nullable=True),
+            sa.Column('error_message', sa.Text(), nullable=True),
+            sa.ForeignKeyConstraint(['agent_id'], ['investigation_agents.id'], ondelete='CASCADE'),
+            sa.ForeignKeyConstraint(['idea_id'], ['ideas.id'], ondelete='CASCADE'),
+            sa.PrimaryKeyConstraint('id'),
+        )
 
-    # Create indexes
-    op.create_index('ix_investigation_runs_agent_id', 'investigation_runs', ['agent_id'], unique=False)
-    op.create_index('ix_investigation_runs_idea_id', 'investigation_runs', ['idea_id'], unique=False)
-    op.create_index('ix_investigation_runs_status', 'investigation_runs', ['status'], unique=False)
-    op.create_index('idx_investigation_run_agent_idea', 'investigation_runs', ['agent_id', 'idea_id'], unique=False)
+    # Create indexes (only if not existing)
+    indexes = [idx['name'] for idx in inspector.get_indexes('investigation_runs')] if 'investigation_runs' in inspector.get_table_names() else []
+    if 'ix_investigation_runs_agent_id' not in indexes:
+        op.create_index('ix_investigation_runs_agent_id', 'investigation_runs', ['agent_id'], unique=False)
+    if 'ix_investigation_runs_idea_id' not in indexes:
+        op.create_index('ix_investigation_runs_idea_id', 'investigation_runs', ['idea_id'], unique=False)
+    if 'ix_investigation_runs_status' not in indexes:
+        op.create_index('ix_investigation_runs_status', 'investigation_runs', ['status'], unique=False)
+    if 'idx_investigation_run_agent_idea' not in indexes:
+        op.create_index('idx_investigation_run_agent_idea', 'investigation_runs', ['agent_id', 'idea_id'], unique=False)
 
 
 def downgrade() -> None:
