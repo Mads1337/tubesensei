@@ -15,6 +15,7 @@ from .ideas import router as ideas_router
 from .quick_analysis import router as quick_analysis_router
 from .investigation_agents import router as investigation_agents_router
 from .investigations import router as investigations_router
+from .roadmap import router as roadmap_router
 from app.core.auth import get_current_user
 from app.database import get_db
 
@@ -43,3 +44,4 @@ router.include_router(ideas_router)
 router.include_router(quick_analysis_router)
 router.include_router(investigation_agents_router)
 router.include_router(investigations_router)
+router.include_router(roadmap_router)
