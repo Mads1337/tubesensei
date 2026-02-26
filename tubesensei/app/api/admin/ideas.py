@@ -18,11 +18,12 @@ from app.core.exceptions import NotFoundException
 from app.database import get_db
 from app.core.config import settings
 from fastapi.templating import Jinja2Templates
-from .template_helpers import get_template_context
+from .template_helpers import get_template_context, register_markdown_filter
 
 from pathlib import Path
 template_dir = Path(__file__).parent.parent.parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(template_dir))
+register_markdown_filter(templates)
 
 router = APIRouter(prefix="/ideas", tags=["admin-ideas"])
 

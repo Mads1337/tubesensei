@@ -64,7 +64,7 @@
                 </div>
                 <div class="hidden px-3 py-3 bg-white dark:bg-gray-800">
                     {% if run.status.value == 'completed' and run.result %}
-                    <div class="prose prose-sm dark:prose-invert max-w-none text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{{ run.result }}</div>
+                    <div class="prose prose-sm dark:prose-invert max-w-none text-sm text-gray-700 dark:text-gray-300">{{ run.result | render_markdown }}</div>
                     {% elif run.status.value == 'failed' and run.error_message %}
                     <div class="text-sm text-red-600 dark:text-red-400">
                         <i class="fas fa-exclamation-triangle mr-1"></i> {{ run.error_message }}

@@ -13,12 +13,13 @@ from app.core.auth import get_current_user
 from app.database import get_db
 from app.models.investigation_agent import InvestigationAgent
 from app.services.investigation_runner import InvestigationRunner
-from .template_helpers import get_template_context
+from .template_helpers import get_template_context, register_markdown_filter
 
 logger = logging.getLogger(__name__)
 
 template_dir = Path(__file__).parent.parent.parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(template_dir))
+register_markdown_filter(templates)
 
 router = APIRouter(prefix="/investigations", tags=["admin-investigations"])
 
