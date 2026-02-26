@@ -1,0 +1,16 @@
+{
+    "include": ["tubesensei"],
+    "exclude": ["**/__pycache__", "**/alembic/**"],
+    "pythonVersion": "3.12",
+    "typeCheckingMode": "basic",
+    "reportMissingImports": "warning",
+    "reportMissingModuleSource": "none",
+    "reportUnknownMemberType": "none",
+    "reportUnknownVariableType": "none",
+    "reportUnknownArgumentType": "none",
+    "reportUnknownParameterType": "none",
+    "reportGeneralTypeIssues": "none",
+    "reportArgumentType": "warning",
+    "reportOptionalMemberAccess": "warning",
+    "reportPossiblyUnboundVariable": "warning"
+}
