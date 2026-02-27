@@ -60,6 +60,10 @@ class Settings(BaseSettings):
         default="",
         description="YouTube Data API v3 key"
     )
+    YOUTUBE_API_KEYS: str = Field(
+        default="",
+        description="Comma-separated YouTube API keys for rotation"
+    )
     YOUTUBE_QUOTA_PER_DAY: int = Field(
         default=10000,
         description="YouTube API daily quota limit"

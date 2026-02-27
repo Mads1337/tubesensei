@@ -28,6 +28,11 @@
         {% include "admin/monitoring/partials/health_cards.html" %}
     </div>
 
+    <!-- YouTube API Quota -->
+    <div id="quota-cards" class="mt-6" hx-get="/admin/monitoring/quota" hx-trigger="every 60s" hx-swap="innerHTML">
+        {% include "admin/monitoring/partials/youtube_quota_cards.html" %}
+    </div>
+
     <!-- Stats Cards -->
     <div id="stats-cards" class="mt-6" hx-get="/admin/monitoring/stats" hx-trigger="every 30s" hx-swap="innerHTML">
         {% include "admin/monitoring/partials/stats_cards.html" %}

@@ -1,5 +1,7 @@
 """Admin Monitoring API router module."""
 
+import logging
+
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 
@@ -9,11 +11,24 @@ from app.services.monitoring_service import MonitoringService
 from fastapi.templating import Jinja2Templates
 from .template_helpers import get_template_context
 
+logger = logging.getLogger(__name__)
+
 from pathlib import Path
 template_dir = Path(__file__).parent.parent.parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(template_dir))
 
 router = APIRouter(prefix="/monitoring", tags=["admin-monitoring"])
+
+
+async def _get_quota_status() -> dict | None:
+    """Fetch YouTube API quota status, returning None if unavailable."""
+    try:
+        from app.integrations.youtube_api import YouTubeAPIClient
+        client = YouTubeAPIClient()
+        return await client.get_quota_status()
+    except Exception as e:
+        logger.debug(f"Could not fetch YouTube quota status: {e}")
+        return None
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -32,6 +47,7 @@ async def monitoring_page(
     queue_status = await monitoring.get_queue_status()
     recent_jobs = await monitoring.get_recent_jobs(limit=10)
     error_summary = await monitoring.get_error_summary()
+    quota_status = await _get_quota_status()
 
     context = get_template_context(
         request,
@@ -41,6 +57,7 @@ async def monitoring_page(
         queue_status=queue_status,
         recent_jobs=recent_jobs,
         error_summary=error_summary,
+        quota_status=quota_status,
     )
 
     return templates.TemplateResponse("admin/monitoring/index.html", context)
@@ -86,6 +103,24 @@ async def stats_partial(
     )
 
     return templates.TemplateResponse("admin/monitoring/partials/stats_cards.html", context)
+
+
+@router.get("/quota", response_class=HTMLResponse)
+async def quota_partial(
+    request: Request,
+    user = Depends(get_current_user),
+):
+    """YouTube API quota partial for HTMX polling"""
+
+    quota_status = await _get_quota_status()
+
+    context = get_template_context(
+        request,
+        user=user,
+        quota_status=quota_status,
+    )
+
+    return templates.TemplateResponse("admin/monitoring/partials/youtube_quota_cards.html", context)
 
 
 @router.get("/errors", response_class=HTMLResponse)

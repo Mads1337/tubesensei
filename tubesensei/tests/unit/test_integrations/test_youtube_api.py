@@ -48,11 +48,17 @@ class TestYouTubeAPIClientInit:
     
     def test_init_without_api_key_raises_error(self):
         """Test initialization without API key raises error."""
-        with patch('app.integrations.youtube_api.settings') as mock_settings:
-            mock_settings.YOUTUBE_API_KEY = None
-            
-            with pytest.raises(APIKeyError, match="YouTube API key is required"):
-                YouTubeAPIClient()
+        from app.integrations.key_pool import APIKeyPool
+        APIKeyPool.reset_instance()
+        try:
+            with patch('app.integrations.youtube_api.settings') as mock_settings:
+                mock_settings.YOUTUBE_API_KEY = ""
+                mock_settings.YOUTUBE_API_KEYS = ""
+                with patch('app.integrations.key_pool.settings', mock_settings):
+                    with pytest.raises(APIKeyError, match="YouTube API key is required"):
+                        YouTubeAPIClient()
+        finally:
+            APIKeyPool.reset_instance()
     
     @patch('app.integrations.youtube_api.build')
     @patch('app.integrations.youtube_api.QuotaManager')
@@ -63,17 +69,15 @@ class TestYouTubeAPIClientInit:
         api_key = "test_api_key"
         quota_per_day = 5000
         rate_limit_per_minute = 30
-        
-        with patch('app.integrations.youtube_api.settings') as mock_settings:
-            mock_settings.YOUTUBE_API_KEY = api_key
-            
-            client = YouTubeAPIClient(
-                quota_per_day=quota_per_day,
-                rate_limit_per_minute=rate_limit_per_minute
-            )
-            
-            mock_quota_manager.assert_called_once_with(daily_quota=quota_per_day)
-            mock_rate_limiter.assert_called_once_with(requests_per_minute=rate_limit_per_minute)
+
+        client = YouTubeAPIClient(
+            api_key=api_key,
+            quota_per_day=quota_per_day,
+            rate_limit_per_minute=rate_limit_per_minute
+        )
+
+        mock_quota_manager.assert_called_once_with(daily_quota=quota_per_day)
+        mock_rate_limiter.assert_called_once_with(requests_per_minute=rate_limit_per_minute)
 
 
 class TestYouTubeAPIClientContextManager:
@@ -636,9 +640,9 @@ class TestYouTubeAPIClientExecuteAPICall:
             
             result = await client._execute_api_call(
                 YouTubeAPIOperation.CHANNELS_LIST,
-                mock_api_method
+                lambda yt: mock_api_method
             )
-            
+
             assert result == {'test': 'response'}
             mock_quota_instance.reserve_quota.assert_called_once()
     
@@ -682,7 +686,7 @@ class TestYouTubeAPIClientExecuteAPICall:
                 with pytest.raises(YouTubeAPIError):
                     await client._execute_api_call(
                         YouTubeAPIOperation.CHANNELS_LIST,
-                        mock_api_method
+                        lambda yt: mock_api_method
                     )
                 
                 # Verify quota was released on error
@@ -717,7 +721,7 @@ class TestYouTubeAPIClientExecuteAPICall:
             with pytest.raises(NetworkError):
                 await client._execute_api_call(
                     YouTubeAPIOperation.CHANNELS_LIST,
-                    Mock()
+                    lambda yt: Mock()
                 )
             
             # Verify quota was released on error

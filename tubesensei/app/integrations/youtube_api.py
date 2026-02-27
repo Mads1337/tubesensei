@@ -28,37 +28,44 @@ class YouTubeAPIClient:
     """
     Async-compatible YouTube API v3 client with quota management and rate limiting.
     """
-    
+
     def __init__(
         self,
         api_key: Optional[str] = None,
         quota_per_day: Optional[int] = None,
         rate_limit_per_minute: Optional[int] = None
     ):
-        # API configuration
-        self.api_key = api_key or settings.YOUTUBE_API_KEY
-        if not self.api_key:
-            raise APIKeyError("YouTube API key is required")
-        
-        # Initialize YouTube API client
-        self.youtube = build('youtube', 'v3', developerKey=self.api_key)
-        
-        # Initialize quota manager
-        self.quota_manager = QuotaManager(
-            daily_quota=quota_per_day or settings.YOUTUBE_QUOTA_PER_DAY
-        )
-        
+        # When an explicit api_key is passed (e.g. tests), work in single-key mode.
+        # Otherwise use the APIKeyPool for automatic rotation.
+        self._pool = None
+        if api_key:
+            self.api_key = api_key
+            self.youtube = build('youtube', 'v3', developerKey=self.api_key)
+            self.quota_manager = QuotaManager(
+                daily_quota=quota_per_day or settings.YOUTUBE_QUOTA_PER_DAY
+            )
+        else:
+            from .key_pool import APIKeyPool
+            self._pool = APIKeyPool()
+            if self._pool.size == 0:
+                raise APIKeyError("YouTube API key is required")
+            # These will be refreshed from the pool on each call, but set
+            # initial values so that existing attribute access works.
+            self.api_key = ""
+            self.youtube = None
+            self.quota_manager = None  # type: ignore[assignment]
+
         # Initialize rate limiter
         self.rate_limiter = RateLimiter(
             requests_per_minute=rate_limit_per_minute or settings.RATE_LIMIT_REQUESTS_PER_MINUTE
         )
-        
+
         # HTTP client for async operations
         self.http_client = httpx.AsyncClient(
             timeout=settings.YOUTUBE_REQUEST_TIMEOUT,
             headers={'User-Agent': 'TubeSensei/1.0'}
         )
-        
+
         # Cache for frequently accessed data
         self._cache: Dict[str, Any] = {}
         self._cache_ttl = settings.YOUTUBE_CACHE_TTL
@@ -66,21 +73,39 @@ class YouTubeAPIClient:
         # Redis client for persistent caching across campaigns
         self._redis_client = None
         self._redis_initialized = False
-    
+
+    async def _refresh_from_pool(self):
+        """Update youtube client and quota_manager from the pool's current key.
+
+        Returns the KeyState when using a pool, None in single-key mode.
+        """
+        if self._pool is None:
+            return None
+        key_state = await self._pool.get_current()
+        self.youtube = key_state.youtube
+        self.quota_manager = key_state.quota_manager
+        self.api_key = key_state.api_key
+        return key_state
+
     async def __aenter__(self):
         """Async context manager entry"""
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit"""
         await self.close()
-    
+
     async def close(self):
         """Close HTTP client, Redis client, and save quota data"""
         await self.http_client.aclose()
         if self._redis_client:
             await self._redis_client.close()
-        await self.quota_manager._save_quota_data()
+        if self._pool:
+            # Save quota data for all keys in the pool
+            for ks in self._pool._keys:
+                await ks.quota_manager._save_quota_data()
+        elif self.quota_manager:
+            await self.quota_manager._save_quota_data()
 
     async def _get_redis(self):
         """Get or create async Redis client for video caching."""
@@ -98,32 +123,46 @@ class YouTubeAPIClient:
                 logger.debug(f"Redis unavailable for YouTube cache, continuing without: {e}")
                 self._redis_client = None
         return self._redis_client
-    
+
+    @staticmethod
+    def _is_quota_exceeded_error(error: HttpError) -> bool:
+        """Check if an HttpError is a quota-exceeded 403."""
+        if error.resp.status != 403:
+            return False
+        try:
+            details = json.loads(error.content.decode("utf-8"))
+            for err in details.get("error", {}).get("errors", []):
+                if err.get("reason") == "quotaExceeded":
+                    return True
+        except (json.JSONDecodeError, KeyError):
+            pass
+        return False
+
     def _handle_api_error(self, error: HttpError) -> None:
         """
         Handle YouTube API errors and raise appropriate exceptions.
-        
+
         Args:
             error: The HttpError from Google API client
-            
+
         Raises:
             Appropriate YouTubeAPIError subclass
         """
         try:
             error_details = json.loads(error.content.decode('utf-8'))
             error_info = error_details.get('error', {})
-            
+
             # Check for quota exceeded
             if error.resp.status == 403:
                 for err in error_info.get('errors', []):
                     if err.get('reason') == 'quotaExceeded':
                         raise QuotaExceededError(
-                            quota_used=self.quota_manager.current_usage,
-                            quota_limit=self.quota_manager.daily_quota
+                            quota_used=self.quota_manager.current_usage if self.quota_manager else 0,
+                            quota_limit=self.quota_manager.daily_quota if self.quota_manager else 0
                         )
                     elif err.get('reason') == 'rateLimitExceeded':
                         raise RateLimitError()
-            
+
             # Check for not found errors
             elif error.resp.status == 404:
                 message = error_info.get('message', 'Resource not found')
@@ -131,66 +170,93 @@ class YouTubeAPIClient:
                     raise ChannelNotFoundError('unknown')
                 elif 'video' in message.lower():
                     raise VideoNotFoundError('unknown')
-            
+
             # Check for invalid API key
             elif error.resp.status == 400:
                 for err in error_info.get('errors', []):
                     if err.get('reason') == 'keyInvalid':
                         raise APIKeyError("Invalid YouTube API key")
-            
+
         except (json.JSONDecodeError, KeyError):
             pass
-        
+
         # Default error
         raise YouTubeAPIError(f"YouTube API error: {error}")
-    
+
     async def _execute_api_call(
         self,
         operation: YouTubeAPIOperation,
-        api_method,
+        api_method_builder,
         **kwargs
     ) -> Any:
         """
         Execute an API call with quota and rate limiting.
-        
+        Supports automatic key rotation when using the pool.
+
         Args:
             operation: The API operation being performed
-            api_method: The API method to call
+            api_method_builder: A callable that takes a youtube client and returns
+                                the API method to call, e.g. lambda yt: yt.search().list
             **kwargs: Arguments for the API method
-            
+
         Returns:
             API response
         """
-        # Reserve quota
-        await self.quota_manager.reserve_quota(operation)
-        
-        try:
-            # Apply rate limiting
-            async with self.rate_limiter.acquire():
-                # Execute in thread pool since googleapiclient is sync
-                loop = asyncio.get_event_loop()
-                response = await loop.run_in_executor(
-                    None,
-                    lambda: api_method(**kwargs).execute()
-                )
-                return response
-                
-        except HttpError as e:
-            # Release quota on error
-            await self.quota_manager.release_quota(operation)
-            self._handle_api_error(e)
-        except Exception as e:
-            # Release quota on error
-            await self.quota_manager.release_quota(operation)
-            raise NetworkError(f"API call failed: {e}", original_error=e)
-    
+        # Number of rotation attempts = number of keys in pool (or 1 for single-key)
+        max_attempts = self._pool.size if self._pool else 1
+
+        for attempt in range(max_attempts):
+            # Refresh client/quota_manager from pool before each attempt.
+            # current_key_state is the KeyState we're using this iteration
+            # (None in single-key mode).
+            current_key_state = await self._refresh_from_pool()
+
+            try:
+                # Reserve quota
+                await self.quota_manager.reserve_quota(operation)
+            except QuotaExceededError:
+                if self._pool and current_key_state:
+                    await self._pool.mark_exhausted(current_key_state)
+                    continue
+                raise
+
+            try:
+                # Apply rate limiting
+                async with self.rate_limiter.acquire():
+                    # Build the API method from the current youtube client
+                    api_method = api_method_builder(self.youtube)
+                    # Execute in thread pool since googleapiclient is sync
+                    loop = asyncio.get_event_loop()
+                    response = await loop.run_in_executor(
+                        None,
+                        lambda: api_method(**kwargs).execute()
+                    )
+                    return response
+
+            except HttpError as e:
+                # Release quota on error
+                await self.quota_manager.release_quota(operation)
+
+                if self._is_quota_exceeded_error(e) and self._pool and current_key_state:
+                    await self._pool.mark_exhausted(current_key_state)
+                    continue
+
+                self._handle_api_error(e)
+            except Exception as e:
+                # Release quota on error
+                await self.quota_manager.release_quota(operation)
+                raise NetworkError(f"API call failed: {e}", original_error=e)
+
+        # If we exhausted all rotation attempts, let get_current raise QuotaExceededError
+        await self._refresh_from_pool()
+
     async def get_channel_info(self, channel_id: str) -> Dict[str, Any]:
         """
         Get detailed information about a YouTube channel.
-        
+
         Args:
             channel_id: YouTube channel ID
-            
+
         Returns:
             Channel information dictionary
         """
@@ -198,20 +264,20 @@ class YouTubeAPIClient:
         cache_key = f"channel:{channel_id}"
         if cache_key in self._cache:
             return self._cache[cache_key]
-        
+
         try:
             response = await self._execute_api_call(
                 YouTubeAPIOperation.CHANNELS_LIST,
-                self.youtube.channels().list,
+                lambda yt: yt.channels().list,
                 part='snippet,statistics,contentDetails,brandingSettings',
                 id=channel_id
             )
-            
+
             if not response.get('items'):
                 raise ChannelNotFoundError(channel_id)
-            
+
             channel_data = response['items'][0]
-            
+
             # Process and structure the data
             result = {
                 'channel_id': channel_data['id'],
@@ -228,17 +294,17 @@ class YouTubeAPIClient:
                 'keywords': channel_data.get('brandingSettings', {}).get('channel', {}).get('keywords', ''),
                 'raw_data': channel_data
             }
-            
+
             # Cache the result
             self._cache[cache_key] = result
-            
+
             return result
-            
+
         except (ChannelNotFoundError, YouTubeAPIError):
             raise
         except Exception as e:
             raise YouTubeAPIError(f"Failed to get channel info: {e}")
-    
+
     async def get_channel_by_handle(self, handle: str) -> Dict[str, Any]:
         """
         Get channel information by handle/username.
@@ -262,7 +328,7 @@ class YouTubeAPIClient:
             try:
                 response = await self._execute_api_call(
                     YouTubeAPIOperation.CHANNELS_LIST,
-                    self.youtube.channels().list,
+                    lambda yt: yt.channels().list,
                     part='snippet,statistics,contentDetails',
                     forHandle=handle
                 )
@@ -275,7 +341,7 @@ class YouTubeAPIClient:
             # 2. Try forUsername (1 unit - for legacy usernames)
             response = await self._execute_api_call(
                 YouTubeAPIOperation.CHANNELS_LIST,
-                self.youtube.channels().list,
+                lambda yt: yt.channels().list,
                 part='snippet,statistics,contentDetails',
                 forUsername=handle
             )
@@ -288,7 +354,7 @@ class YouTubeAPIClient:
             logger.debug(f"Falling back to search.list for @{handle}")
             search_response = await self._execute_api_call(
                 YouTubeAPIOperation.SEARCH_LIST,
-                self.youtube.search().list,
+                lambda yt: yt.search().list,
                 part='snippet',
                 q=f"@{handle}",
                 type='channel',
@@ -320,7 +386,7 @@ class YouTubeAPIClient:
             raise
         except Exception as e:
             raise YouTubeAPIError(f"Failed to get channel by handle: {e}")
-    
+
     async def list_channel_videos(
         self,
         channel_id: str,
@@ -330,28 +396,28 @@ class YouTubeAPIClient:
     ) -> List[Dict[str, Any]]:
         """
         List videos from a channel's uploads.
-        
+
         Args:
             channel_id: YouTube channel ID
             max_results: Maximum number of videos to fetch
             published_after: Only fetch videos published after this date
             published_before: Only fetch videos published before this date
-            
+
         Returns:
             List of video information dictionaries
         """
         # Get channel info to get uploads playlist
         channel_info = await self.get_channel_info(channel_id)
         uploads_playlist_id = channel_info['uploads_playlist_id']
-        
+
         videos = []
         next_page_token = None
-        
+
         while len(videos) < max_results:
             # Calculate batch size
             remaining = max_results - len(videos)
             batch_size = min(50, remaining)  # YouTube API max is 50 per page
-            
+
             try:
                 # Fetch playlist items
                 request_params = {
@@ -359,28 +425,28 @@ class YouTubeAPIClient:
                     'playlistId': uploads_playlist_id,
                     'maxResults': batch_size
                 }
-                
+
                 if next_page_token:
                     request_params['pageToken'] = next_page_token
-                
+
                 response = await self._execute_api_call(
                     YouTubeAPIOperation.PLAYLIST_ITEMS_LIST,
-                    self.youtube.playlistItems().list,
+                    lambda yt: yt.playlistItems().list,
                     **request_params
                 )
-                
+
                 # Process videos
                 for item in response.get('items', []):
                     video_published = datetime.fromisoformat(
                         item['contentDetails']['videoPublishedAt'].replace('Z', '+00:00')
                     )
-                    
+
                     # Apply date filters
                     if published_after and video_published < published_after:
                         continue
                     if published_before and video_published > published_before:
                         continue
-                    
+
                     videos.append({
                         'video_id': item['contentDetails']['videoId'],
                         'title': item['snippet']['title'],
@@ -390,18 +456,18 @@ class YouTubeAPIClient:
                         'channel_id': item['snippet']['channelId'],
                         'playlist_item_id': item['id']
                     })
-                
+
                 # Check for more pages
                 next_page_token = response.get('nextPageToken')
                 if not next_page_token:
                     break
-                    
+
             except Exception as e:
                 logger.error(f"Error fetching channel videos: {e}")
                 break
-        
+
         return videos[:max_results]
-    
+
     async def get_video_details(
         self,
         video_ids: List[str]
@@ -459,7 +525,7 @@ class YouTubeAPIClient:
             try:
                 response = await self._execute_api_call(
                     YouTubeAPIOperation.VIDEOS_LIST,
-                    self.youtube.videos().list,
+                    lambda yt: yt.videos().list,
                     part='snippet,contentDetails,statistics,status',
                     id=','.join(batch_ids)
                 )
@@ -511,7 +577,7 @@ class YouTubeAPIClient:
                 continue
 
         return all_videos
-    
+
     async def search_videos(
         self,
         query: str,
@@ -557,14 +623,14 @@ class YouTubeAPIClient:
                 request_params['videoDuration'] = video_duration
             if next_page_token:
                 request_params['pageToken'] = next_page_token
-            
+
             try:
                 response = await self._execute_api_call(
                     YouTubeAPIOperation.SEARCH_LIST,
-                    self.youtube.search().list,
+                    lambda yt: yt.search().list,
                     **request_params
                 )
-                
+
                 for item in response.get('items', []):
                     videos.append({
                         'video_id': item['id']['videoId'],
@@ -575,11 +641,11 @@ class YouTubeAPIClient:
                         'published_at': item['snippet']['publishedAt'],
                         'thumbnails': item['snippet']['thumbnails']
                     })
-                
+
                 next_page_token = response.get('nextPageToken')
                 if not next_page_token:
                     break
-                    
+
             except QuotaExceededError:
                 # Re-raise quota errors - these are critical and should not be silently ignored
                 raise
@@ -646,7 +712,7 @@ class YouTubeAPIClient:
 
             response = await self._execute_api_call(
                 YouTubeAPIOperation.SEARCH_LIST,
-                self.youtube.search().list,
+                lambda yt: yt.search().list,
                 **search_params
             )
 
@@ -674,29 +740,31 @@ class YouTubeAPIClient:
     def _parse_duration(self, duration: str) -> int:
         """
         Parse ISO 8601 duration to seconds.
-        
+
         Args:
             duration: ISO 8601 duration string (e.g., PT4M13S)
-            
+
         Returns:
             Duration in seconds
         """
         import re
-        
+
         match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration)
         if not match:
             return 0
-        
+
         hours = int(match.group(1) or 0)
         minutes = int(match.group(2) or 0)
         seconds = int(match.group(3) or 0)
-        
+
         return hours * 3600 + minutes * 60 + seconds
-    
+
     async def get_quota_status(self) -> Dict[str, Any]:
-        """Get current quota usage status"""
+        """Get current quota usage status (pool-level when pool is active)."""
+        if self._pool:
+            return await self._pool.get_pool_status()
         return await self.quota_manager.get_usage_stats()
-    
+
     async def get_rate_limit_status(self) -> Dict[str, Any]:
         """Get current rate limit status"""
         return self.rate_limiter.get_stats()

@@ -1,0 +1,192 @@
+{% if quota_status is not defined or quota_status is none %}
+<!-- YouTube API Quota: Not Configured -->
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+        <i class="fas fa-key text-orange-500 mr-2"></i>YouTube API Quota
+    </h2>
+    <p class="text-gray-500 dark:text-gray-400 text-center py-4">
+        <i class="fas fa-info-circle mr-1"></i>YouTube API key not configured
+    </p>
+</div>
+
+{% elif quota_status.total_keys is defined and quota_status.total_keys > 1 %}
+<!-- Multi-Key Pool Mode -->
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+        <i class="fas fa-key text-orange-500 mr-2"></i>YouTube API Quota
+        <span class="ml-2 text-xs font-normal px-2 py-0.5 bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-400 rounded-full">
+            {{ quota_status.total_keys }} keys
+        </span>
+    </h2>
+
+    <!-- Pool Summary -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4">
+            <div class="flex items-center">
+                <div class="p-2 rounded-lg bg-orange-100 dark:bg-orange-900">
+                    <i class="fas fa-tachometer-alt text-orange-600 dark:text-orange-400"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Total Used</p>
+                    <p class="text-lg font-bold text-gray-900 dark:text-white">{{ "{:,}".format(quota_status.total_usage) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4">
+            <div class="flex items-center">
+                <div class="p-2 rounded-lg bg-orange-100 dark:bg-orange-900">
+                    <i class="fas fa-battery-half text-orange-600 dark:text-orange-400"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Remaining</p>
+                    <p class="text-lg font-bold text-gray-900 dark:text-white">{{ "{:,}".format(quota_status.total_remaining) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4">
+            <div class="flex items-center">
+                <div class="p-2 rounded-lg
+                    {% if quota_status.usage_percentage < 60 %}bg-green-100 dark:bg-green-900
+                    {% elif quota_status.usage_percentage < 80 %}bg-yellow-100 dark:bg-yellow-900
+                    {% else %}bg-red-100 dark:bg-red-900{% endif %}">
+                    <i class="fas fa-percentage
+                        {% if quota_status.usage_percentage < 60 %}text-green-600 dark:text-green-400
+                        {% elif quota_status.usage_percentage < 80 %}text-yellow-600 dark:text-yellow-400
+                        {% else %}text-red-600 dark:text-red-400{% endif %}"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Usage</p>
+                    <p class="text-lg font-bold
+                        {% if quota_status.usage_percentage < 60 %}text-green-600 dark:text-green-400
+                        {% elif quota_status.usage_percentage < 80 %}text-yellow-600 dark:text-yellow-400
+                        {% else %}text-red-600 dark:text-red-400{% endif %}">
+                        {{ "%.1f"|format(quota_status.usage_percentage) }}%
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4">
+            <div class="flex items-center">
+                <div class="p-2 rounded-lg bg-orange-100 dark:bg-orange-900">
+                    <i class="fas fa-exchange-alt text-orange-600 dark:text-orange-400"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Active Key</p>
+                    <p class="text-lg font-bold text-gray-900 dark:text-white">#{{ quota_status.current_key_index + 1 }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Per-Key Breakdown -->
+    <div class="space-y-3">
+        {% for key in quota_status.per_key %}
+        <div class="flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <div class="flex items-center gap-2 min-w-[80px]">
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Key {{ key.key_index + 1 }}</span>
+                {% if key.is_exhausted %}
+                <span class="text-xs px-1.5 py-0.5 bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400 rounded font-medium">exhausted</span>
+                {% elif loop.index0 == quota_status.current_key_index %}
+                <span class="text-xs px-1.5 py-0.5 bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400 rounded font-medium">active</span>
+                {% endif %}
+            </div>
+            <div class="flex-1">
+                <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5">
+                    <div class="h-2.5 rounded-full
+                        {% if key.usage_percentage < 60 %}bg-green-500
+                        {% elif key.usage_percentage < 80 %}bg-yellow-500
+                        {% else %}bg-red-500{% endif %}"
+                        style="width: {{ key.usage_percentage }}%"></div>
+                </div>
+            </div>
+            <div class="text-sm text-gray-500 dark:text-gray-400 min-w-[120px] text-right">
+                {{ "{:,}".format(key.current_usage) }} / {{ "{:,}".format(key.daily_quota) }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% else %}
+<!-- Single-Key Mode (pool with 1 key, or raw stats) -->
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+        <i class="fas fa-key text-orange-500 mr-2"></i>YouTube API Quota
+    </h2>
+
+    {# Pool returns total_usage/total_remaining; raw stats returns current_usage/remaining_quota #}
+    {% set used = quota_status.total_usage if quota_status.total_usage is defined else quota_status.current_usage %}
+    {% set remaining = quota_status.total_remaining if quota_status.total_remaining is defined else quota_status.remaining_quota %}
+    {% set reset = quota_status.per_key[0].reset_time if quota_status.per_key is defined else quota_status.reset_time %}
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4">
+            <div class="flex items-center">
+                <div class="p-2 rounded-lg bg-orange-100 dark:bg-orange-900">
+                    <i class="fas fa-tachometer-alt text-orange-600 dark:text-orange-400"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Quota Used</p>
+                    <p class="text-lg font-bold text-gray-900 dark:text-white">{{ "{:,}".format(used) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4">
+            <div class="flex items-center">
+                <div class="p-2 rounded-lg bg-orange-100 dark:bg-orange-900">
+                    <i class="fas fa-battery-half text-orange-600 dark:text-orange-400"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Remaining</p>
+                    <p class="text-lg font-bold text-gray-900 dark:text-white">{{ "{:,}".format(remaining) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4">
+            <div class="flex items-center">
+                <div class="p-2 rounded-lg
+                    {% if quota_status.usage_percentage < 60 %}bg-green-100 dark:bg-green-900
+                    {% elif quota_status.usage_percentage < 80 %}bg-yellow-100 dark:bg-yellow-900
+                    {% else %}bg-red-100 dark:bg-red-900{% endif %}">
+                    <i class="fas fa-percentage
+                        {% if quota_status.usage_percentage < 60 %}text-green-600 dark:text-green-400
+                        {% elif quota_status.usage_percentage < 80 %}text-yellow-600 dark:text-yellow-400
+                        {% else %}text-red-600 dark:text-red-400{% endif %}"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Usage</p>
+                    <p class="text-lg font-bold
+                        {% if quota_status.usage_percentage < 60 %}text-green-600 dark:text-green-400
+                        {% elif quota_status.usage_percentage < 80 %}text-yellow-600 dark:text-yellow-400
+                        {% else %}text-red-600 dark:text-red-400{% endif %}">
+                        {{ "%.1f"|format(quota_status.usage_percentage) }}%
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4">
+            <div class="flex items-center">
+                <div class="p-2 rounded-lg bg-orange-100 dark:bg-orange-900">
+                    <i class="fas fa-clock text-orange-600 dark:text-orange-400"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Reset Time</p>
+                    <p class="text-sm font-bold text-gray-900 dark:text-white">
+                        {% if reset %}
+                            {{ reset[:16] | replace("T", " ") }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
