@@ -275,7 +275,7 @@ class IdeaExtractionAgent(BaseAgent):
         try:
             response = await self.llm_manager.generate(
                 prompt=user_prompt,
-                model_type=ModelType.BALANCED,
+                model_type=ModelType.QUALITY,
                 system_prompt=system_prompt,
                 temperature=0.3,
                 max_tokens=4000,
@@ -391,7 +391,7 @@ class IdeaExtractionAgent(BaseAgent):
         try:
             response = await self.llm_manager.generate(
                 prompt=user_prompt,
-                model_type=ModelType.BALANCED,
+                model_type=ModelType.QUALITY,
                 system_prompt=system_prompt or "",
                 temperature=0.3,
                 max_tokens=1500,
@@ -423,7 +423,7 @@ class IdeaExtractionAgent(BaseAgent):
         try:
             response = await self.llm_manager.generate(
                 prompt=user_prompt,
-                model_type=ModelType.BALANCED,
+                model_type=ModelType.FAST,
                 system_prompt=system_prompt or "",
                 temperature=0.3,
                 max_tokens=1000,

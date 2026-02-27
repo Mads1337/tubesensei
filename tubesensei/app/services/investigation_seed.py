@@ -69,7 +69,7 @@ _AGENTS: list[dict] = [
             "- ROI projections\n"
             "- Financial risks and mitigation strategies",
         ),
-        "config": {"model_type": "balanced", "temperature": 0.3, "max_tokens": 2000},
+        "config": {"model_type": "quality", "temperature": 0.3, "max_tokens": 2000},
     },
     {
         "name": "Feasibility Study",
@@ -92,7 +92,7 @@ _AGENTS: list[dict] = [
             "- Key dependencies and risks\n"
             "- Go/no-go recommendation with reasoning",
         ),
-        "config": {"model_type": "balanced", "temperature": 0.3, "max_tokens": 2000},
+        "config": {"model_type": "quality", "temperature": 0.3, "max_tokens": 2000},
     },
     {
         "name": "Market Research",
@@ -117,7 +117,7 @@ _AGENTS: list[dict] = [
             "- Go-to-market strategy recommendations\n"
             "- Market risks and opportunities",
         ),
-        "config": {"model_type": "balanced", "temperature": 0.4, "max_tokens": 2000},
+        "config": {"model_type": "quality", "temperature": 0.4, "max_tokens": 2000},
     },
     {
         "name": "Technical Complexity",
@@ -143,7 +143,7 @@ _AGENTS: list[dict] = [
             "- Technical debt risks\n"
             "- Infrastructure cost estimates",
         ),
-        "config": {"model_type": "balanced", "temperature": 0.2, "max_tokens": 2000},
+        "config": {"model_type": "quality", "temperature": 0.2, "max_tokens": 2000},
     },
     {
         "name": "Competitive Analysis",
@@ -168,7 +168,7 @@ _AGENTS: list[dict] = [
             "- SWOT analysis\n"
             "- Strategic positioning recommendations",
         ),
-        "config": {"model_type": "balanced", "temperature": 0.3, "max_tokens": 2000},
+        "config": {"model_type": "quality", "temperature": 0.3, "max_tokens": 2000},
     },
 ]
 
@@ -179,8 +179,9 @@ _AGENTS: list[dict] = [
 
 
 async def seed_investigation_agents(db: AsyncSession) -> list[InvestigationAgent]:
-    """Seed default investigation agent templates. Skips agents that already exist by name."""
+    """Seed default investigation agent templates. Creates new agents or updates existing ones if config changed."""
     created: list[InvestigationAgent] = []
+    updated: list[InvestigationAgent] = []
 
     for agent_data in _AGENTS:
         name = agent_data["name"]
@@ -189,7 +190,13 @@ async def seed_investigation_agents(db: AsyncSession) -> list[InvestigationAgent
             select(InvestigationAgent).where(InvestigationAgent.name == name)
         )
         if existing:
-            logger.info("Investigation agent '%s' already exists — skipping.", name)
+            # Update config if it has changed
+            if existing.config != agent_data["config"]:
+                existing.config = agent_data["config"]
+                updated.append(existing)
+                logger.info("Updated config for investigation agent '%s'.", name)
+            else:
+                logger.info("Investigation agent '%s' already up to date — skipping.", name)
             continue
 
         agent = InvestigationAgent(
@@ -204,16 +211,16 @@ async def seed_investigation_agents(db: AsyncSession) -> list[InvestigationAgent
         created.append(agent)
         logger.info("Queued investigation agent '%s' for insertion.", name)
 
-    if created:
+    if created or updated:
         await db.commit()
         for agent in created:
             await db.refresh(agent)
         logger.info(
-            "Seeded %d investigation agent(s): %s",
+            "Seeded %d new, updated %d investigation agent(s).",
             len(created),
-            [a.name for a in created],
+            len(updated),
         )
     else:
-        logger.info("No new investigation agents to seed.")
+        logger.info("No investigation agents to seed or update.")
 
     return created

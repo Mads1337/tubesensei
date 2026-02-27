@@ -32,11 +32,11 @@ from app.ai.retry_strategy import RetryStrategy
 
 logger = logging.getLogger(__name__)
 
-# Cost tracking per 1M tokens (current pricing - Dec 2025)
+# Cost tracking per 1M tokens (current pricing - Feb 2026)
 MODEL_COSTS = {
-    # DeepSeek Models (primary - very cost effective)
-    "deepseek-chat": {"input": 0.14, "output": 0.28},      # V3.2 non-thinking mode
-    "deepseek-reasoner": {"input": 0.55, "output": 2.19},  # V3.2 thinking/reasoning mode
+    # DeepSeek Models (primary - V3.2 unified pricing)
+    "deepseek-chat": {"input": 0.28, "output": 0.42},      # V3.2 non-thinking mode
+    "deepseek-reasoner": {"input": 0.28, "output": 0.42},  # V3.2 thinking mode (+ thinking tokens billed as output)
 
     # OpenAI Models (fallback)
     "gpt-4.1": {"input": 2.00, "output": 8.00},
@@ -48,8 +48,9 @@ MODEL_COSTS = {
     "claude-haiku-4-5": {"input": 1.0, "output": 5.0},
 
     # Google Gemini Models (fallback)
-    "gemini-2.5-pro": {"input": 1.25, "output": 5.0},
-    "gemini-2.5-flash": {"input": 0.075, "output": 0.30},
+    "gemini-2.5-pro": {"input": 1.25, "output": 10.0},
+    "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
+    "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40},
 }
 
 
@@ -77,25 +78,24 @@ class LLMManager:
     Unified LLM manager with multi-provider support, fallback, and cost tracking.
     """
     
-    # Model configuration - DeepSeek primary, others as fallback (Dec 2025)
-    # To use deepseek-reasoner for quality tasks, change the first entry in QUALITY tier
+    # Model configuration - DeepSeek primary, others as fallback (Feb 2026)
     MODEL_CONFIG: Dict[ModelType, List[str]] = {
         ModelType.FAST: [
             "deepseek-chat",             # Primary - fast and cheap
+            "gemini-2.5-flash-lite",     # Cheapest fallback
             "gemini-2.5-flash",          # Fast fallback
             "gpt-4.1-mini",              # OpenAI fallback
-            "claude-haiku-4-5",          # Anthropic fallback
         ],
         ModelType.BALANCED: [
-            "deepseek-chat",             # Primary - can switch to deepseek-reasoner if needed
+            "deepseek-chat",             # Primary
             "gemini-2.5-flash",          # Google fallback
+            "gemini-2.5-flash-lite",     # Cheap fallback
             "gpt-4.1-mini",              # OpenAI fallback
-            "claude-sonnet-4-5-20250929", # Anthropic fallback
         ],
         ModelType.QUALITY: [
-            "deepseek-chat",             # Primary - switch to "deepseek-reasoner" for complex reasoning
-            "gpt-4.1",                   # OpenAI quality fallback
-            "claude-sonnet-4-5-20250929", # Anthropic quality fallback
+            "deepseek-reasoner",         # Primary - thinking/reasoning mode
+            "deepseek-chat",             # Fast DeepSeek fallback
+            "gemini-2.5-flash",          # Google fallback
             "gemini-2.5-pro",            # Google quality fallback
         ]
     }
@@ -161,7 +161,7 @@ class LLMManager:
 
             # Google Gemini models (fallback)
             if settings.GOOGLE_API_KEY:
-                google_models = ["gemini-2.5-pro", "gemini-2.5-flash"]
+                google_models = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
                 for model in google_models:
                     model_list.append({
                         "model_name": model,
@@ -175,26 +175,21 @@ class LLMManager:
                 logger.warning("No LLM API keys configured")
                 return
             
-            # Initialize router with DeepSeek-primary fallbacks (Dec 2025)
+            # Initialize router with cost-effective fallbacks (Feb 2026)
             self.router = Router(
                 model_list=model_list,
                 fallbacks=[
-                    # DeepSeek primary fallbacks
-                    {"deepseek-chat": ["gpt-4.1-mini", "gemini-2.5-flash"]},
-                    {"deepseek-reasoner": ["deepseek-chat", "gpt-4.1"]},
-
-                    # OpenAI fallbacks
-                    {"gpt-4.1": ["deepseek-chat", "claude-sonnet-4-5-20250929"]},
-                    {"gpt-4.1-mini": ["deepseek-chat", "gemini-2.5-flash"]},
-                    {"o3-mini": ["deepseek-reasoner", "gpt-4.1"]},
-
-                    # Anthropic fallbacks
-                    {"claude-sonnet-4-5-20250929": ["deepseek-chat", "gpt-4.1"]},
-                    {"claude-haiku-4-5": ["deepseek-chat", "gpt-4.1-mini"]},
+                    # DeepSeek fallbacks
+                    {"deepseek-chat": ["gemini-2.5-flash-lite", "gemini-2.5-flash"]},
+                    {"deepseek-reasoner": ["deepseek-chat", "gemini-2.5-flash"]},
 
                     # Google fallbacks
-                    {"gemini-2.5-pro": ["deepseek-chat", "gpt-4.1"]},
                     {"gemini-2.5-flash": ["deepseek-chat", "gpt-4.1-mini"]},
+                    {"gemini-2.5-flash-lite": ["deepseek-chat", "gemini-2.5-flash"]},
+                    {"gemini-2.5-pro": ["deepseek-chat", "gemini-2.5-flash"]},
+
+                    # OpenAI fallbacks
+                    {"gpt-4.1-mini": ["deepseek-chat", "gemini-2.5-flash-lite"]},
                 ]
             )
             
@@ -548,8 +543,8 @@ class LLMManager:
             input_tokens = getattr(usage, 'prompt_tokens', 0)
             output_tokens = getattr(usage, 'completion_tokens', 0)
             
-            input_cost = (input_tokens / 1000) * model_cost["input"]
-            output_cost = (output_tokens / 1000) * model_cost["output"]
+            input_cost = (input_tokens / 1_000_000) * model_cost["input"]
+            output_cost = (output_tokens / 1_000_000) * model_cost["output"]
             
             return round(input_cost + output_cost, 6)
             
