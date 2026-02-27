@@ -81,10 +81,10 @@ class LLMManager:
     # Model configuration - DeepSeek primary, others as fallback (Feb 2026)
     MODEL_CONFIG: Dict[ModelType, List[str]] = {
         ModelType.FAST: [
-            "deepseek-chat",             # Primary - fast and cheap
-            "gemini-2.5-flash-lite",     # Cheapest fallback
-            "gemini-2.5-flash",          # Fast fallback
-            "gpt-4.1-mini",              # OpenAI fallback
+            "gemini-2.5-flash-lite",     # Primary - cheapest
+            "deepseek-chat",             # Fast fallback
+            "gemini-2.5-flash",          # Google fallback
+            "gpt-4.1-mini",             # OpenAI fallback
         ],
         ModelType.BALANCED: [
             "deepseek-chat",             # Primary
@@ -93,11 +93,11 @@ class LLMManager:
             "gpt-4.1-mini",              # OpenAI fallback
         ],
         ModelType.QUALITY: [
-            "deepseek-reasoner",         # Primary - thinking/reasoning mode
+            "deepseek-reasoner",         # Primary - thinking/reasoning via OpenRouter
             "deepseek-chat",             # Fast DeepSeek fallback
             "gemini-2.5-flash",          # Google fallback
             "gemini-2.5-pro",            # Google quality fallback
-        ]
+        ],
     }
     
     def __init__(self):
@@ -122,8 +122,26 @@ class LLMManager:
         try:
             # Build model list for router
             model_list = []
-            
-            # DeepSeek models (primary - Dec 2025)
+
+            # OpenRouter models (primary - routed through OpenRouter)
+            if settings.OPENROUTER_API_KEY:
+                openrouter_models = {
+                    "deepseek-chat": "openrouter/deepseek/deepseek-chat",
+                    "deepseek-reasoner": "openrouter/deepseek/deepseek-reasoner",
+                    "gemini-2.5-flash-lite": "openrouter/google/gemini-2.5-flash-lite-preview-06-17",
+                    "gemini-2.5-flash": "openrouter/google/gemini-2.5-flash-preview-05-20",
+                    "gemini-2.5-pro": "openrouter/google/gemini-2.5-pro-preview-05-06",
+                }
+                for model_name, litellm_model in openrouter_models.items():
+                    model_list.append({
+                        "model_name": model_name,
+                        "litellm_params": {
+                            "model": litellm_model,
+                            "api_key": settings.OPENROUTER_API_KEY,
+                        }
+                    })
+
+            # DeepSeek models (fallback)
             if settings.DEEPSEEK_API_KEY:
                 deepseek_models = ["deepseek-chat", "deepseek-reasoner"]
                 for model in deepseek_models:

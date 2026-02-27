@@ -105,10 +105,11 @@ class TestLLMManagerInitialization:
         mock_settings.ANTHROPIC_API_KEY = None
         mock_settings.GOOGLE_API_KEY = None
         mock_settings.DEEPSEEK_API_KEY = None
-        
+        mock_settings.OPENROUTER_API_KEY = None
+
         with patch('tubesensei.app.ai.llm_manager.Router') as mock_router:
             manager = LLMManager()
-            
+
             assert manager.router is not None
             assert manager.redis_client is None
             assert manager.total_cost == Decimal('0.00')
@@ -124,10 +125,11 @@ class TestLLMManagerInitialization:
         mock_settings.ANTHROPIC_API_KEY = None
         mock_settings.GOOGLE_API_KEY = None
         mock_settings.DEEPSEEK_API_KEY = None
-        
+        mock_settings.OPENROUTER_API_KEY = None
+
         with patch('tubesensei.app.ai.llm_manager.Router'):
             manager = LLMManager()
-            
+
             # Check that all model types have corresponding configurations
             for model_type in ModelType:
                 assert model_type in manager.MODEL_CONFIG
@@ -143,10 +145,11 @@ class TestLLMManagerInitialization:
         mock_settings.ANTHROPIC_API_KEY = None
         mock_settings.GOOGLE_API_KEY = None
         mock_settings.DEEPSEEK_API_KEY = None
-        
+        mock_settings.OPENROUTER_API_KEY = None
+
         with patch('tubesensei.app.ai.llm_manager.Router') as mock_router:
             manager = LLMManager()
-            
+
             # Should log warning about no API keys
             mock_logger.warning.assert_called_with("No LLM API keys configured")
     
@@ -158,7 +161,8 @@ class TestLLMManagerInitialization:
         mock_settings.ANTHROPIC_API_KEY = "anthropic_key"
         mock_settings.GOOGLE_API_KEY = "google_key"
         mock_settings.DEEPSEEK_API_KEY = "deepseek_key"
-        
+        mock_settings.OPENROUTER_API_KEY = None
+
         with patch('tubesensei.app.ai.llm_manager.Router') as mock_router:
             manager = LLMManager()
             
@@ -370,9 +374,10 @@ class TestCompletionMethod:
         mock_settings.ANTHROPIC_API_KEY = None
         mock_settings.GOOGLE_API_KEY = None
         mock_settings.DEEPSEEK_API_KEY = None
+        mock_settings.OPENROUTER_API_KEY = None
         mock_settings.LLM_DEFAULT_TEMPERATURE = 0.7
         mock_settings.LLM_COST_TRACKING_ENABLED = True
-        
+
         # Setup mock completion response
         mock_response = MagicMock()
         mock_response.choices[0].message.content = "Test response content"
@@ -407,7 +412,8 @@ class TestCompletionMethod:
         mock_settings.ANTHROPIC_API_KEY = None
         mock_settings.GOOGLE_API_KEY = None
         mock_settings.DEEPSEEK_API_KEY = None
-        
+        mock_settings.OPENROUTER_API_KEY = None
+
         manager = LLMManager()
         manager.router = None
         
@@ -425,8 +431,9 @@ class TestCompletionMethod:
         mock_settings.ANTHROPIC_API_KEY = None
         mock_settings.GOOGLE_API_KEY = None
         mock_settings.DEEPSEEK_API_KEY = None
+        mock_settings.OPENROUTER_API_KEY = None
         mock_settings.LLM_DEFAULT_TEMPERATURE = 0.7
-        
+
         manager = LLMManager()
         manager.redis_client = AsyncMock()
         

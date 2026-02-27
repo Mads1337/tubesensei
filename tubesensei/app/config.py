@@ -288,6 +288,10 @@ class Settings(BaseSettings):
         default="",
         description="DeepSeek API key for DeepSeek models (optional)"
     )
+    OPENROUTER_API_KEY: str = Field(
+        default="",
+        description="OpenRouter API key for accessing models via OpenRouter"
+    )
     QWEN_API_KEY: str = Field(
         default="",
         description="Qwen/Alibaba Cloud API key for Qwen models (optional)"
