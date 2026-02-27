@@ -118,26 +118,52 @@ class SimilarVideosAgent(BaseAgent):
                         continue
 
                     youtube_video_id = source_video.youtube_video_id
+                    source_title = source_video.title
 
-                    # Get related videos with duration filter
+                    # Get related videos with duration filter (pass title to avoid extra API call)
                     youtube_duration_filter = self._get_youtube_duration_filter()
                     async with self.context.youtube_rate_limiter.acquire():
                         related_videos = await youtube.get_related_videos(
                             video_id=youtube_video_id,
                             max_results=max_per_video,
-                            video_duration=youtube_duration_filter
+                            video_duration=youtube_duration_filter,
+                            source_title=source_title
                         )
                         self.increment_api_calls()
 
                     if not related_videos:
                         continue
 
-                    # Get details for related videos
-                    related_ids = [v["video_id"] for v in related_videos]
+                    # Filter out videos already in DB to save API quota
+                    related_map = {v["video_id"]: v for v in related_videos}
+                    related_ids = list(related_map.keys())[:50]
 
-                    async with self.context.youtube_rate_limiter.acquire():
-                        video_details = await youtube.get_video_details(related_ids[:50])
-                        self.increment_api_calls()
+                    existing_result = await self.db.execute(
+                        select(Video.youtube_video_id, Video.duration_seconds).where(
+                            Video.youtube_video_id.in_(related_ids)
+                        )
+                    )
+                    existing_db_videos = {row[0]: row[1] for row in existing_result.all()}
+                    ids_to_fetch = [vid for vid in related_ids if vid not in existing_db_videos]
+
+                    if ids_to_fetch:
+                        async with self.context.youtube_rate_limiter.acquire():
+                            video_details = await youtube.get_video_details(ids_to_fetch)
+                            self.increment_api_calls()
+                    else:
+                        video_details = []
+
+                    # Merge existing DB videos back using related video data + DB duration
+                    for yt_vid_id, duration_secs in existing_db_videos.items():
+                        rv = related_map.get(yt_vid_id)
+                        if rv:
+                            video_details.append({
+                                **rv,
+                                "duration_seconds": duration_secs,
+                            })
+
+                    if existing_db_videos:
+                        logger.debug(f"SimilarVideosAgent: Skipped API fetch for {len(existing_db_videos)} videos already in DB")
 
                     # Process each related video
                     for video_data in video_details:

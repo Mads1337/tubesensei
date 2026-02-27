@@ -79,7 +79,7 @@ class VideoDiscovery:
                 # Get video list from channel
                 video_list = await youtube.list_channel_videos(
                     channel.youtube_channel_id,
-                    max_results=max_videos * 2,  # Fetch extra to account for filtering
+                    max_results=max_videos,
                     published_after=filters.published_after,
                     published_before=filters.published_before
                 )
@@ -302,7 +302,7 @@ class VideoDiscovery:
             search_results = await youtube.search_videos(
                 query=query,
                 channel_id=youtube_channel_id,
-                max_results=max_results * 2,  # Get extra for filtering
+                max_results=max_results,
                 published_after=filters.published_after if filters else None
             )
         except Exception as e:

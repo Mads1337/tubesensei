@@ -71,6 +71,7 @@ class CoordinatorAgent(BaseAgent):
         self._iteration = 0
         self._processed_channels: Set[UUID] = set()
         self._videos_pending_filter: List[UUID] = []
+        self._quota_used_at_start = 0
 
     async def run(self, input_data: Dict[str, Any]) -> AgentResult:
         """
@@ -119,6 +120,10 @@ class CoordinatorAgent(BaseAgent):
             self._channel_expansion_agent = ChannelExpansionAgent(child_context, self.youtube_client)
             self._topic_filter_agent = TopicFilterAgent(child_context, self.llm_manager)
             self._similar_videos_agent = SimilarVideosAgent(child_context, self.youtube_client)
+
+            # Record starting quota for budget tracking
+            if self.youtube_client:
+                self._quota_used_at_start = self.youtube_client.quota_manager.current_usage
 
             # Run discovery loop
             await self._run_discovery_loop(topic)
@@ -174,6 +179,19 @@ class CoordinatorAgent(BaseAgent):
             if await self.check_should_stop():
                 logger.info("CoordinatorAgent: Stopping - limit reached or cancelled")
                 break
+
+            # Check campaign quota budget
+            if self.youtube_client:
+                campaign_quota_used = (
+                    self.youtube_client.quota_manager.current_usage - self._quota_used_at_start
+                )
+                max_budget = self.context.campaign.max_quota_budget
+                if campaign_quota_used >= max_budget:
+                    logger.info(
+                        f"CoordinatorAgent: Stopping - quota budget exceeded "
+                        f"({campaign_quota_used}/{max_budget} units)"
+                    )
+                    break
 
             # Refresh campaign from database to get current stats before capturing baseline
             await self.db.refresh(self.context.campaign)
@@ -365,8 +383,19 @@ class CoordinatorAgent(BaseAgent):
             logger.info("CoordinatorAgent: No relevant videos for similar video search")
             return
 
-        # Limit to a subset for similar videos search
-        videos_for_similar = relevant_videos[:20]
+        # Limit to top 5 most relevant videos to conserve API quota
+        videos_for_similar = relevant_videos[:5]
+
+        # Check quota budget before running similar videos search (~100 units per video)
+        if self.youtube_client:
+            remaining_quota = self.youtube_client.quota_manager.get_remaining_quota()
+            estimated_cost = len(videos_for_similar) * 101  # 100 for search + 1 for video details
+            if remaining_quota < 600:
+                logger.info(
+                    f"CoordinatorAgent: Skipping similar videos - insufficient quota "
+                    f"(remaining: {remaining_quota}, need ~{estimated_cost})"
+                )
+                return
 
         logger.info(f"CoordinatorAgent: Finding similar videos for {len(videos_for_similar)} videos")
 

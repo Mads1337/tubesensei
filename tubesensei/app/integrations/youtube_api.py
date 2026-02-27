@@ -62,6 +62,10 @@ class YouTubeAPIClient:
         # Cache for frequently accessed data
         self._cache: Dict[str, Any] = {}
         self._cache_ttl = settings.YOUTUBE_CACHE_TTL
+
+        # Redis client for persistent caching across campaigns
+        self._redis_client = None
+        self._redis_initialized = False
     
     async def __aenter__(self):
         """Async context manager entry"""
@@ -72,9 +76,28 @@ class YouTubeAPIClient:
         await self.close()
     
     async def close(self):
-        """Close HTTP client and save quota data"""
+        """Close HTTP client, Redis client, and save quota data"""
         await self.http_client.aclose()
+        if self._redis_client:
+            await self._redis_client.close()
         await self.quota_manager._save_quota_data()
+
+    async def _get_redis(self):
+        """Get or create async Redis client for video caching."""
+        if not self._redis_initialized:
+            self._redis_initialized = True
+            try:
+                import redis.asyncio as aioredis
+                self._redis_client = aioredis.from_url(
+                    settings.REDIS_URL,
+                    decode_responses=True
+                )
+                await self._redis_client.ping()
+                logger.debug("YouTube API Redis cache connected")
+            except Exception as e:
+                logger.debug(f"Redis unavailable for YouTube cache, continuing without: {e}")
+                self._redis_client = None
+        return self._redis_client
     
     def _handle_api_error(self, error: HttpError) -> None:
         """
@@ -219,74 +242,80 @@ class YouTubeAPIClient:
     async def get_channel_by_handle(self, handle: str) -> Dict[str, Any]:
         """
         Get channel information by handle/username.
-        
+
+        Lookup order (cheapest first):
+        1. forHandle (1 unit) - modern @handles
+        2. forUsername (1 unit) - legacy usernames
+        3. search.list (100 units) - last resort fallback
+
         Args:
             handle: YouTube channel handle (e.g., @username)
-            
+
         Returns:
             Channel information dictionary
         """
         # Remove @ if present
         handle = handle.lstrip('@')
-        
+
         try:
-            # First try with forUsername (for legacy usernames)
+            # 1. Try forHandle first (1 unit - works for modern @handles)
+            try:
+                response = await self._execute_api_call(
+                    YouTubeAPIOperation.CHANNELS_LIST,
+                    self.youtube.channels().list,
+                    part='snippet,statistics,contentDetails',
+                    forHandle=handle
+                )
+                if response.get('items'):
+                    channel_data = response['items'][0]
+                    return await self.get_channel_info(channel_data['id'])
+            except Exception as e:
+                logger.debug(f"forHandle lookup failed for @{handle}: {e}")
+
+            # 2. Try forUsername (1 unit - for legacy usernames)
             response = await self._execute_api_call(
                 YouTubeAPIOperation.CHANNELS_LIST,
                 self.youtube.channels().list,
                 part='snippet,statistics,contentDetails',
                 forUsername=handle
             )
-            
-            if not response.get('items'):
-                # For modern @handles, we need to search first
-                search_response = await self._execute_api_call(
-                    YouTubeAPIOperation.SEARCH_LIST,
-                    self.youtube.search().list,
-                    part='snippet',
-                    q=f"@{handle}",
-                    type='channel',
-                    maxResults=5  # Get more results to find exact match
-                )
-                
-                print(f"DEBUG: Search response for @{handle}: {search_response}")
-                
-                if search_response.get('items'):
-                    # Try to find exact handle match first
-                    for item in search_response['items']:
-                        channel_title = item['snippet']['title'].lower()
-                        channel_desc = item['snippet'].get('description', '').lower()
-                        
-                        # Check if the handle appears in the title or description
-                        if handle.lower() in channel_title or f"@{handle}".lower() in channel_desc:
-                            channel_id = item['snippet']['channelId']
-                            print(f"DEBUG: Found exact match for @{handle}: {item['snippet']['title']}")
-                            return await self.get_channel_info(channel_id)
-                    
-                    # If no exact match, check the first result's custom URL
-                    first_result = search_response['items'][0]
-                    channel_id = first_result['snippet']['channelId']
-                    
-                    # Get full channel info to check custom URL
-                    channel_info = await self.get_channel_info(channel_id)
-                    custom_url = channel_info.get('custom_url', '').lower()
-                    
-                    print(f"DEBUG: Checking custom URL: {custom_url} vs @{handle}")
-                    
-                    # Only return if custom URL matches the handle we're looking for
-                    if custom_url == f"@{handle.lower()}" or custom_url == handle.lower():
-                        return channel_info
-                    else:
-                        # Custom URL doesn't match, this is the wrong channel
-                        print(f"DEBUG: Custom URL mismatch. Expected @{handle}, got {custom_url}")
-                        pass  # Continue to raise ChannelNotFoundError
-            
-            if not response.get('items'):
-                raise ChannelNotFoundError(f"@{handle}")
-            
-            channel_data = response['items'][0]
-            return await self.get_channel_info(channel_data['id'])
-            
+
+            if response.get('items'):
+                channel_data = response['items'][0]
+                return await self.get_channel_info(channel_data['id'])
+
+            # 3. Last resort: search (100 units)
+            logger.debug(f"Falling back to search.list for @{handle}")
+            search_response = await self._execute_api_call(
+                YouTubeAPIOperation.SEARCH_LIST,
+                self.youtube.search().list,
+                part='snippet',
+                q=f"@{handle}",
+                type='channel',
+                maxResults=5
+            )
+
+            if search_response.get('items'):
+                # Try to find exact handle match
+                for item in search_response['items']:
+                    channel_title = item['snippet']['title'].lower()
+                    channel_desc = item['snippet'].get('description', '').lower()
+
+                    if handle.lower() in channel_title or f"@{handle}".lower() in channel_desc:
+                        channel_id = item['snippet']['channelId']
+                        return await self.get_channel_info(channel_id)
+
+                # Check first result's custom URL
+                first_result = search_response['items'][0]
+                channel_id = first_result['snippet']['channelId']
+                channel_info = await self.get_channel_info(channel_id)
+                custom_url = channel_info.get('custom_url', '').lower()
+
+                if custom_url == f"@{handle.lower()}" or custom_url == handle.lower():
+                    return channel_info
+
+            raise ChannelNotFoundError(f"@{handle}")
+
         except (ChannelNotFoundError, YouTubeAPIError):
             raise
         except Exception as e:
@@ -379,22 +408,54 @@ class YouTubeAPIClient:
     ) -> List[Dict[str, Any]]:
         """
         Get detailed information for multiple videos.
-        
+
+        Checks Redis cache first, then fetches uncached videos from the API.
+        Results are cached with 24-hour TTL to avoid repeated lookups.
+
         Args:
             video_ids: List of YouTube video IDs (max 50 per call)
-            
+
         Returns:
             List of video information dictionaries
         """
         if not video_ids:
             return []
-        
+
         all_videos = []
-        
+        ids_to_fetch = list(video_ids)
+
+        # Check Redis cache for already-fetched video details
+        redis = await self._get_redis()
+        if redis:
+            try:
+                cache_keys = [f"yt:video:{vid}" for vid in video_ids]
+                cached_values = await redis.mget(cache_keys)
+
+                cached_ids = set()
+                for vid, cached_json in zip(video_ids, cached_values):
+                    if cached_json:
+                        try:
+                            video_data = json.loads(cached_json)
+                            all_videos.append(video_data)
+                            cached_ids.add(vid)
+                        except json.JSONDecodeError:
+                            pass
+
+                ids_to_fetch = [vid for vid in video_ids if vid not in cached_ids]
+
+                if cached_ids:
+                    logger.debug(f"Redis cache hit for {len(cached_ids)} videos, fetching {len(ids_to_fetch)} from API")
+            except Exception as e:
+                logger.debug(f"Redis cache read failed, fetching all from API: {e}")
+                ids_to_fetch = list(video_ids)
+
+        if not ids_to_fetch:
+            return all_videos
+
         # Process in batches of 50 (YouTube API limit)
-        for i in range(0, len(video_ids), 50):
-            batch_ids = video_ids[i:i+50]
-            
+        for i in range(0, len(ids_to_fetch), 50):
+            batch_ids = ids_to_fetch[i:i+50]
+
             try:
                 response = await self._execute_api_call(
                     YouTubeAPIOperation.VIDEOS_LIST,
@@ -402,12 +463,12 @@ class YouTubeAPIClient:
                     part='snippet,contentDetails,statistics,status',
                     id=','.join(batch_ids)
                 )
-                
+
                 for item in response.get('items', []):
                     # Parse duration
                     duration = item['contentDetails']['duration']
                     duration_seconds = self._parse_duration(duration)
-                    
+
                     video_data = {
                         'video_id': item['id'],
                         'title': item['snippet']['title'],
@@ -429,13 +490,26 @@ class YouTubeAPIClient:
                         'thumbnails': item['snippet']['thumbnails'],
                         'raw_data': item
                     }
-                    
+
                     all_videos.append(video_data)
-                    
+
+                    # Cache in Redis with 24-hour TTL
+                    if redis:
+                        try:
+                            # Cache without raw_data to save space
+                            cache_data = {k: v for k, v in video_data.items() if k != 'raw_data'}
+                            await redis.setex(
+                                f"yt:video:{item['id']}",
+                                86400,  # 24 hours
+                                json.dumps(cache_data)
+                            )
+                        except Exception:
+                            pass  # Non-critical, continue without caching
+
             except Exception as e:
                 logger.error(f"Error fetching video details for batch: {e}")
                 continue
-        
+
         return all_videos
     
     async def search_videos(
@@ -519,84 +593,38 @@ class YouTubeAPIClient:
         self,
         video_id: str,
         max_results: int = 25,
-        video_duration: Optional[str] = None
+        video_duration: Optional[str] = None,
+        source_title: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Get related/similar videos for a given video.
-
-        Uses the YouTube Search API with relatedToVideoId parameter.
-        Note: This parameter is deprecated but may still work.
-        Falls back to title-based search if relatedToVideoId fails.
+        Get related/similar videos for a given video using title-based search.
 
         Args:
             video_id: YouTube video ID to find related videos for
             max_results: Maximum results to return (default 25)
             video_duration: Duration filter - 'short' (<4min), 'medium' (4-20min), 'long' (>20min)
+            source_title: Title of the source video (avoids extra API call if provided)
 
         Returns:
             List of related video information dictionaries
         """
+        import re
         videos = []
 
         try:
-            # First try with relatedToVideoId (deprecated but may work)
-            request_params = {
-                'part': 'snippet',
-                'relatedToVideoId': video_id,
-                'type': 'video',
-                'maxResults': min(50, max_results),
-            }
-            if video_duration:
-                request_params['videoDuration'] = video_duration
-
-            try:
-                response = await self._execute_api_call(
-                    YouTubeAPIOperation.SEARCH_LIST,
-                    self.youtube.search().list,
-                    **request_params
-                )
-
-                for item in response.get('items', []):
-                    # Skip the source video itself
-                    related_video_id = item['id'].get('videoId')
-                    if related_video_id and related_video_id != video_id:
-                        videos.append({
-                            'video_id': related_video_id,
-                            'title': item['snippet']['title'],
-                            'description': item['snippet']['description'],
-                            'channel_id': item['snippet']['channelId'],
-                            'channel_title': item['snippet']['channelTitle'],
-                            'published_at': item['snippet']['publishedAt'],
-                            'thumbnails': item['snippet']['thumbnails'],
-                            'discovery_method': 'related_to_video_id',
-                        })
-
-                if videos:
-                    logger.debug(f"Found {len(videos)} related videos using relatedToVideoId")
-                    return videos[:max_results]
-
-            except Exception as e:
-                logger.debug(f"relatedToVideoId failed (deprecated): {e}")
-                # Fall through to title-based search
-
-            # Fallback: Search using the source video's title
-            # First get the source video's details
-            video_details = await self.get_video_details([video_id])
-            if not video_details:
-                logger.warning(f"Could not get details for video {video_id}")
-                return []
-
-            source_video = video_details[0]
-            source_title = source_video.get('title', '')
+            # Get source video title if not provided by caller
+            if not source_title:
+                video_details = await self.get_video_details([video_id])
+                if not video_details:
+                    logger.warning(f"Could not get details for video {video_id}")
+                    return []
+                source_title = video_details[0].get('title', '')
 
             if not source_title:
                 return []
 
             # Extract key terms from title (remove common words)
-            import re
-            # Remove special characters and split
             words = re.findall(r'\b[a-zA-Z]{3,}\b', source_title.lower())
-            # Remove very common words
             stop_words = {'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'her', 'was', 'one', 'our', 'out', 'how', 'what', 'with', 'this', 'that', 'from', 'they', 'will', 'have', 'has', 'been', 'were'}
             key_terms = [w for w in words if w not in stop_words][:5]
 
@@ -606,12 +634,11 @@ class YouTubeAPIClient:
             search_query = ' '.join(key_terms)
             logger.debug(f"Searching for related videos with query: {search_query}")
 
-            # Search for videos with similar title
             search_params = {
                 'part': 'snippet',
                 'q': search_query,
                 'type': 'video',
-                'maxResults': min(50, max_results + 5),  # Get a few extra to filter
+                'maxResults': min(50, max_results + 5),
                 'order': 'relevance'
             }
             if video_duration:
@@ -625,7 +652,6 @@ class YouTubeAPIClient:
 
             for item in response.get('items', []):
                 related_video_id = item['id'].get('videoId')
-                # Skip the source video itself
                 if related_video_id and related_video_id != video_id:
                     videos.append({
                         'video_id': related_video_id,

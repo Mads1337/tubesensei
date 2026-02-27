@@ -303,6 +303,11 @@ class TopicCampaign(BaseModel):
         return self.config.get("idea_confidence_threshold", 0.7)
 
     @property
+    def max_quota_budget(self) -> int:
+        """Maximum YouTube API quota units this campaign can consume."""
+        return self.config.get("max_quota_budget", 2000)
+
+    @property
     def enabled_agents(self) -> List[str]:
         """List of enabled discovery agents."""
         return self.config.get("enabled_agents", [

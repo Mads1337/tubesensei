@@ -142,12 +142,36 @@ class ChannelExpansionAgent(BaseAgent):
                     "was_expanded": True,
                 })
 
-            # Get full details for videos
-            video_ids_to_fetch = [v["video_id"] for v in videos_data]
+            # Filter out videos already in DB to save API quota
+            videos_data_map = {v["video_id"]: v for v in videos_data}
+            all_video_ids = list(videos_data_map.keys())[:50]
 
-            async with self.context.youtube_rate_limiter.acquire():
-                video_details = await youtube.get_video_details(video_ids_to_fetch[:50])  # Batch limit
-                self.increment_api_calls()
+            existing_result = await self.db.execute(
+                select(Video.youtube_video_id, Video.duration_seconds).where(
+                    Video.youtube_video_id.in_(all_video_ids)
+                )
+            )
+            existing_db_videos = {row[0]: row[1] for row in existing_result.all()}
+            video_ids_to_fetch = [vid for vid in all_video_ids if vid not in existing_db_videos]
+
+            if video_ids_to_fetch:
+                async with self.context.youtube_rate_limiter.acquire():
+                    video_details = await youtube.get_video_details(video_ids_to_fetch)
+                    self.increment_api_calls()
+            else:
+                video_details = []
+
+            # Merge existing DB videos back so they still get CampaignVideo junction records
+            for yt_vid_id, duration_secs in existing_db_videos.items():
+                vd = videos_data_map.get(yt_vid_id)
+                if vd:
+                    video_details.append({
+                        **vd,
+                        "duration_seconds": duration_secs,
+                    })
+
+            if existing_db_videos:
+                logger.debug(f"ChannelExpansionAgent: Skipped API fetch for {len(existing_db_videos)} videos already in DB")
 
             total_items = len(video_details)
 
