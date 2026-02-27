@@ -24,6 +24,18 @@
                     {% endfor %}
                 </select>
             </div>
+            <div class="flex-1">
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Model</label>
+                <select name="model_name"
+                        class="block w-full text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-primary-500 focus:border-primary-500">
+                    <option value="">Agent default</option>
+                    <option value="deepseek-chat">deepseek-chat</option>
+                    <option value="deepseek-reasoner">deepseek-reasoner</option>
+                    <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
+                    <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                    <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                </select>
+            </div>
             <button type="submit" class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50">
                 <i class="fas fa-play mr-1"></i> Run
                 <span id="investigation-spinner-{{ idea_id }}" class="htmx-indicator ml-2">
@@ -50,6 +62,9 @@
                             {{ run.status.value }}
                         </span>
                         <span class="text-sm font-medium text-gray-900 dark:text-white">{{ run.agent.name }}</span>
+                        {% if run.model_used %}
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300">{{ run.model_used }}</span>
+                        {% endif %}
                     </div>
                     <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
                         {% if run.tokens_used %}

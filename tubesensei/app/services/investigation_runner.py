@@ -98,7 +98,7 @@ class InvestigationRunner:
     # ------------------------------------------------------------------
 
     async def run_investigation(
-        self, agent_id: UUID, idea_id: UUID
+        self, agent_id: UUID, idea_id: UUID, model_override: str | None = None
     ) -> InvestigationRun:
         """
         Run an investigation agent against an idea.
@@ -150,10 +150,11 @@ class InvestigationRunner:
             max_tokens = (agent.config or {}).get("max_tokens")
 
             logger.info(
-                "Running investigation: agent=%s idea=%s model_type=%s",
+                "Running investigation: agent=%s idea=%s model_type=%s model_override=%s",
                 agent_id,
                 idea_id,
                 model_type.value,
+                model_override,
             )
 
             # Step 6 - call the LLM
@@ -163,6 +164,8 @@ class InvestigationRunner:
                 llm_kwargs["temperature"] = float(temperature)
             if max_tokens is not None:
                 llm_kwargs["max_tokens"] = int(max_tokens)
+            if model_override:
+                llm_kwargs["model"] = model_override
 
             response = await llm_manager.generate(
                 prompt=user_prompt,
@@ -179,6 +182,7 @@ class InvestigationRunner:
             run.result = content
             run.tokens_used = usage.get("total_tokens")
             run.estimated_cost_usd = float(cost) if cost is not None else None
+            run.model_used = response.get("model")
 
             # Step 8 - try to parse structured JSON from result
             try:

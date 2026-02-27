@@ -29,11 +29,16 @@ async def run_investigation(
     request: Request,
     agent_id: UUID = Form(...),
     idea_id: UUID = Form(...),
+    model_name: str = Form(default=""),
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     runner = InvestigationRunner(db)
-    run = await runner.run_investigation(agent_id=agent_id, idea_id=idea_id)
+    run = await runner.run_investigation(
+        agent_id=agent_id,
+        idea_id=idea_id,
+        model_override=model_name or None,
+    )
 
     # Return the full investigation results section for the idea
     runs = await runner.get_runs_for_idea(idea_id)

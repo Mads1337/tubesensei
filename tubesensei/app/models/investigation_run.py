@@ -6,7 +6,7 @@ record, enabling detailed monitoring and auditability of the investigation pipel
 """
 import enum
 
-from sqlalchemy import Column, Integer, Float, Text, ForeignKey, Index
+from sqlalchemy import Column, Integer, Float, String, Text, ForeignKey, Index
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -68,6 +68,11 @@ class InvestigationRun(BaseModel):
 
     estimated_cost_usd = Column(
         Float,
+        nullable=True
+    )
+
+    model_used = Column(
+        String(100),
         nullable=True
     )
 

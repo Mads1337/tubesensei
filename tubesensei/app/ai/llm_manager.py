@@ -122,6 +122,7 @@ class LLMManager:
         try:
             # Build model list for router
             model_list = []
+            registered_models: set[str] = set()
 
             # OpenRouter models (primary - routed through OpenRouter)
             if settings.OPENROUTER_API_KEY:
@@ -140,54 +141,55 @@ class LLMManager:
                             "api_key": settings.OPENROUTER_API_KEY,
                         }
                     })
+                    registered_models.add(model_name)
 
-            # DeepSeek models (fallback)
+            # DeepSeek models (fallback — skipped if already covered by OpenRouter)
             if settings.DEEPSEEK_API_KEY:
-                deepseek_models = ["deepseek-chat", "deepseek-reasoner"]
-                for model in deepseek_models:
-                    model_list.append({
-                        "model_name": model,
-                        "litellm_params": {
-                            "model": f"deepseek/{model}",
-                            "api_key": settings.DEEPSEEK_API_KEY
-                        }
-                    })
+                for model in ["deepseek-chat", "deepseek-reasoner"]:
+                    if model not in registered_models:
+                        model_list.append({
+                            "model_name": model,
+                            "litellm_params": {
+                                "model": f"deepseek/{model}",
+                                "api_key": settings.DEEPSEEK_API_KEY
+                            }
+                        })
 
             # OpenAI models (fallback)
             if settings.OPENAI_API_KEY:
-                openai_models = ["gpt-4.1", "gpt-4.1-mini", "o3-mini"]
-                for model in openai_models:
-                    model_list.append({
-                        "model_name": model,
-                        "litellm_params": {
-                            "model": f"openai/{model}",
-                            "api_key": settings.OPENAI_API_KEY
-                        }
-                    })
+                for model in ["gpt-4.1", "gpt-4.1-mini", "o3-mini"]:
+                    if model not in registered_models:
+                        model_list.append({
+                            "model_name": model,
+                            "litellm_params": {
+                                "model": f"openai/{model}",
+                                "api_key": settings.OPENAI_API_KEY
+                            }
+                        })
 
             # Anthropic models (fallback)
             if settings.ANTHROPIC_API_KEY:
-                anthropic_models = ["claude-sonnet-4-5-20250929", "claude-haiku-4-5"]
-                for model in anthropic_models:
-                    model_list.append({
-                        "model_name": model,
-                        "litellm_params": {
-                            "model": f"anthropic/{model}",
-                            "api_key": settings.ANTHROPIC_API_KEY
-                        }
-                    })
+                for model in ["claude-sonnet-4-5-20250929", "claude-haiku-4-5"]:
+                    if model not in registered_models:
+                        model_list.append({
+                            "model_name": model,
+                            "litellm_params": {
+                                "model": f"anthropic/{model}",
+                                "api_key": settings.ANTHROPIC_API_KEY
+                            }
+                        })
 
-            # Google Gemini models (fallback)
+            # Google Gemini models (fallback — skipped if already covered by OpenRouter)
             if settings.GOOGLE_API_KEY:
-                google_models = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
-                for model in google_models:
-                    model_list.append({
-                        "model_name": model,
-                        "litellm_params": {
-                            "model": f"gemini/{model}",
-                            "api_key": settings.GOOGLE_API_KEY
-                        }
-                    })
+                for model in ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"]:
+                    if model not in registered_models:
+                        model_list.append({
+                            "model_name": model,
+                            "litellm_params": {
+                                "model": f"gemini/{model}",
+                                "api_key": settings.GOOGLE_API_KEY
+                            }
+                        })
             
             if not model_list:
                 logger.warning("No LLM API keys configured")
@@ -349,6 +351,7 @@ class LLMManager:
         self,
         messages: List[Dict[str, str]],
         model_type: ModelType = ModelType.BALANCED,
+        model: Optional[str] = None,
         temperature: float = None,
         max_tokens: int = None,
         use_cache: bool = True,
@@ -356,15 +359,16 @@ class LLMManager:
     ) -> LLMResponse:
         """
         Get LLM completion with automatic model selection and fallback.
-        
+
         Args:
             messages: List of message dicts with 'role' and 'content'
             model_type: Type of model to use (fast/balanced/quality)
+            model: Specific model name to use (overrides model_type)
             temperature: Generation temperature (default from config)
             max_tokens: Maximum tokens to generate
             use_cache: Whether to use Redis caching (default: True)
             **kwargs: Additional LiteLLM parameters
-            
+
         Returns:
             LLMResponse with completion data
         """
@@ -391,8 +395,11 @@ class LLMManager:
                 logger.info(f"Cache hit for LLM request: {cached_response.model}")
                 return cached_response
         
-        # Get model list for the requested type
-        available_models = self.MODEL_CONFIG.get(model_type, [])
+        # Get model list — specific model override or model_type fallback list
+        if model:
+            available_models = [model]
+        else:
+            available_models = self.MODEL_CONFIG.get(model_type, [])
         if not available_models:
             raise ValueError(f"No models configured for type: {model_type}")
         
@@ -455,7 +462,31 @@ class LLMManager:
                 processing_time = time.time() - start_time
                 
                 # Extract response data
-                content = response.choices[0].message.content
+                message = response.choices[0].message
+                content = message.content
+
+                # Gemini models can return None content with text in parts
+                if content is None:
+                    # Try parts (Gemini native format sometimes leaks through)
+                    parts = getattr(message, 'parts', None)
+                    if parts and isinstance(parts, list):
+                        content = ''.join(
+                            p.get('text', '') if isinstance(p, dict) else str(p)
+                            for p in parts
+                        )
+                    # Try reasoning_content for thinking models
+                    if not content:
+                        content = getattr(message, 'reasoning_content', None) or ''
+                    logger.warning(
+                        f"Model {model} returned None content, "
+                        f"extracted from fallback: {len(content)} chars. "
+                        f"Message keys: {list(vars(message).keys()) if hasattr(message, '__dict__') else 'N/A'}"
+                    )
+
+                # Ensure content is always a string
+                if not isinstance(content, str):
+                    content = str(content) if content else ''
+
                 tokens_used = response.usage.total_tokens if response.usage else 0
                 
                 # Calculate cost
@@ -501,6 +532,7 @@ class LLMManager:
         self,
         prompt: str,
         model_type: ModelType = ModelType.BALANCED,
+        model: Optional[str] = None,
         temperature: float = None,
         max_tokens: int = None,
         system_prompt: str = None,
@@ -513,6 +545,7 @@ class LLMManager:
         Args:
             prompt: The prompt text to send
             model_type: Type of model to use (fast/balanced/quality)
+            model: Specific model name to use (overrides model_type)
             temperature: Generation temperature
             max_tokens: Maximum tokens to generate
             system_prompt: Optional system prompt
@@ -532,6 +565,7 @@ class LLMManager:
         response = await self.complete(
             messages=messages,
             model_type=model_type,
+            model=model,
             temperature=temperature,
             max_tokens=max_tokens,
             use_cache=use_cache,
