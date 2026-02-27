@@ -17,16 +17,18 @@ class TestPromptType:
         """Test that all expected prompt types exist."""
         expected_types = [
             "video_filter",
-            "idea_extraction", 
+            "topic_filter",
+            "idea_extraction",
             "idea_categorization",
+            "idea_consolidation",
             "quality_assessment",
             "summary_generation"
         ]
-        
+
         actual_types = [pt.value for pt in PromptType]
-        
+
         assert set(expected_types) == set(actual_types)
-        assert len(PromptType) == 5
+        assert len(PromptType) == 7
     
     def test_prompt_type_accessibility(self):
         """Test that all prompt types are accessible."""
@@ -93,7 +95,7 @@ class TestPromptTemplates:
         )
         
         assert system_prompt is not None
-        assert "business analyst" in system_prompt.lower()
+        assert "business analyst" in system_prompt.lower() or "selective" in system_prompt.lower()
         assert user_prompt is not None
         assert "This is a test transcript" in user_prompt
         assert "Business Ideas Video" in user_prompt
@@ -228,17 +230,18 @@ class TestPromptTemplates:
     def test_list_prompt_types(self):
         """Test list_prompt_types returns all available types."""
         prompt_types = PromptTemplates.list_prompt_types()
-        
+
         assert isinstance(prompt_types, list)
-        assert len(prompt_types) == 5
-        
+        assert len(prompt_types) == 7
+
         # Check all expected types are present
         values = [pt.value for pt in prompt_types]
         expected_values = [
-            "video_filter", "idea_extraction", "idea_categorization",
+            "video_filter", "topic_filter", "idea_extraction",
+            "idea_categorization", "idea_consolidation",
             "quality_assessment", "summary_generation"
         ]
-        
+
         assert set(values) == set(expected_values)
     
     def test_get_prompt_info_complete(self):
@@ -268,6 +271,8 @@ class TestPromptTemplates:
             "category": "SaaS",
             "source_context": "Test context",
             "video_title": "Video Title",
+            "topic": "Test Topic",
+            "candidate_ideas_json": "[{}]",
             "source": "Test Source",
             "idea_count": 5,
             "ideas_summary": "Test ideas",

@@ -20,6 +20,7 @@ class PromptType(Enum):
     IDEA_EXTRACTION = "idea_extraction"
     IDEA_CATEGORIZATION = "idea_categorization"
     QUALITY_ASSESSMENT = "quality_assessment"
+    IDEA_CONSOLIDATION = "idea_consolidation"
     SUMMARY_GENERATION = "summary_generation"
 
 
@@ -32,12 +33,14 @@ class PromptTemplates:
 
         PromptType.TOPIC_FILTER: """You are an expert content analyst specializing in determining YouTube video relevance to specific topics. Your task is to analyze video metadata (title, description, channel) and determine if the video is relevant to the given topic. Be thorough but fair - a video can be tangentially related and still be relevant. Focus on the core subject matter, not production quality or popularity.""",
 
-        PromptType.IDEA_EXTRACTION: """You are a business analyst expert at identifying and extracting actionable business ideas from content. Focus on ideas that are specific, implementable, and have clear value propositions.""",
+        PromptType.IDEA_EXTRACTION: """You are a highly selective business analyst. Your job is to extract only genuinely distinct, specific, and implementable business ideas. You reject generic advice, vague concepts, and near-duplicates. Quality over quantity — returning 0 ideas is better than returning low-quality ones.""",
         
         PromptType.IDEA_CATEGORIZATION: """You are an expert at categorizing business ideas by industry, complexity, and potential. Provide structured categorization with clear reasoning.""",
         
         PromptType.QUALITY_ASSESSMENT: """You are a venture capitalist evaluating business ideas for viability and potential. Assess ideas based on market opportunity, feasibility, and uniqueness.""",
         
+        PromptType.IDEA_CONSOLIDATION: """You are a deduplication and quality filter for business ideas. You merge semantically similar ideas into the strongest version and discard vague or generic entries. Be aggressive about merging — two ideas targeting the same market with the same mechanism are one idea.""",
+
         PromptType.SUMMARY_GENERATION: """You are an expert content summarizer specializing in business and technology content. Create concise, actionable summaries that capture the key insights and value propositions."""
     }
     
@@ -101,7 +104,7 @@ Respond ONLY with valid JSON (no markdown, no explanation outside JSON):
 """,
 
         PromptType.IDEA_EXTRACTION: """
-Extract all business ideas, opportunities, and actionable insights from this video transcript.
+Extract only the most specific, unique, and implementable business ideas from this transcript. At most 5 per section. Most transcripts contain 0-3 genuinely distinct ideas.
 
 Transcript:
 {transcript}
@@ -111,18 +114,35 @@ Video Context:
 - Channel: {channel_name}
 - Duration: {duration_minutes} minutes
 
-For each identified idea, provide:
+ACCEPT an idea only if it has ALL of these:
+- A specific product, service, or business model (not just a category)
+- A clear target market or customer segment
+- A defined approach, mechanism, or value proposition
+- Enough detail that someone could start building it
+
+REJECT and do NOT include:
+- Generic business advice ("use social media", "build an audience", "find a niche")
+- Trend observations without a concrete business model ("AI is growing")
+- Vague concepts ("some kind of marketplace")
+- Slight variations of the same core idea (pick the best version only)
+- Ideas the speaker mentions only in passing without substance
+
+Confidence calibration:
+- 0.9-1.0: Speaker explicitly described the idea with specifics (product, market, approach)
+- 0.7-0.89: Idea is clearly implied with enough detail to act on
+- Below 0.7: You are inferring or extrapolating beyond what was said — do NOT include these
+
+For each idea provide:
 1. Clear, concise title (max 100 chars)
 2. Detailed description (200-500 chars)
 3. Category (SaaS, E-commerce, Mobile App, Service, Platform, Hardware, Other)
 4. Target market
 5. Key value proposition
 6. Estimated complexity (1-10 scale)
-7. Approximate timestamp or section where mentioned
+7. Confidence score (see calibration above)
+8. Source context (direct quote or paraphrase from transcript)
 
-Here are two examples of well-extracted ideas:
-
-Example 1 - High confidence SaaS idea:
+Example of a well-extracted idea:
 {{
     "title": "AI-Powered Invoice Reconciliation Tool",
     "description": "A SaaS platform that uses machine learning to automatically match invoices with purchase orders and bank statements, reducing manual accounting work by 80%. Integrates with QuickBooks, Xero, and SAP.",
@@ -134,19 +154,9 @@ Example 1 - High confidence SaaS idea:
     "source_context": "The host says: 'we spent 3 weeks building an invoice matcher and our clients saved 80% of their reconciliation time'"
 }}
 
-Example 2 - Medium confidence service idea:
-{{
-    "title": "Remote Podcast Production Service",
-    "description": "Done-for-you podcast production service handling recording setup guidance, audio editing, show notes, and distribution for busy entrepreneurs. Monthly subscription model.",
-    "category": "Service",
-    "target_market": "Entrepreneurs and executives who want a podcast but lack time for production",
-    "value_proposition": "Launch and maintain a professional podcast without learning audio editing",
-    "complexity_score": 3,
-    "confidence": 0.75,
-    "source_context": "Mentioned while discussing content marketing: 'podcasting is huge but nobody wants to edit audio'"
-}}
+It is better to return 0 ideas than to return low-quality or duplicate ideas.
 
-Now extract all ideas from the transcript above. Respond in JSON format:
+Respond in JSON format:
 {{
     "ideas": [
         {{
@@ -160,7 +170,7 @@ Now extract all ideas from the transcript above. Respond in JSON format:
             "source_context": "Quote or context from transcript"
         }}
     ],
-    "summary": "Brief summary of all ideas found",
+    "summary": "Brief summary of ideas found",
     "total_ideas": 0
 }}
 """,
@@ -240,6 +250,41 @@ Respond in JSON format:
     "similar_solutions": ["solution1", "solution2"],
     "main_challenges": ["challenge1", "challenge2"],
     "overall_recommendation": "Pursue/Consider/Skip"
+}}
+""",
+
+        PromptType.IDEA_CONSOLIDATION: """
+You are given a list of candidate business ideas extracted from a single video. Many may be duplicates, near-duplicates, or too vague to be useful.
+
+Video: {video_title}
+
+Candidate ideas (JSON):
+{candidate_ideas_json}
+
+Your tasks:
+1. MERGE ideas that describe the same core concept (same market + same mechanism = one idea). Keep the best title, combine the strongest details from both descriptions.
+2. DISCARD ideas that are generic advice, trend observations, or too vague to act on.
+3. Return only genuinely distinct, specific, implementable ideas.
+
+For each surviving idea, preserve all original fields (title, description, category, target_market, value_proposition, complexity_score, confidence, source_context). When merging, pick the higher confidence and combine source_context values.
+
+Respond in JSON format:
+{{
+    "consolidated_ideas": [
+        {{
+            "title": "Idea title",
+            "description": "Detailed description",
+            "category": "Category",
+            "target_market": "Target audience",
+            "value_proposition": "Key value",
+            "complexity_score": 1,
+            "confidence": 0.0,
+            "source_context": "Quote or context from transcript"
+        }}
+    ],
+    "merge_log": ["Merged 'X' and 'Y' into 'Z'", "Discarded 'W' (too vague)"],
+    "original_count": 0,
+    "final_count": 0
 }}
 """,
 

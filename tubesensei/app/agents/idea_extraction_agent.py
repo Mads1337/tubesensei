@@ -7,6 +7,7 @@ pausing, resuming, and progress tracking.
 """
 import asyncio
 import hashlib
+import json
 import logging
 from typing import Dict, Any, List, Optional
 
@@ -183,6 +184,10 @@ class IdeaExtractionAgent(BaseAgent):
             )
             all_ideas.extend(ideas)
 
+        # Consolidate ideas to merge duplicates and discard vague ones
+        if len(chunks) > 1 or len(all_ideas) > 5:
+            all_ideas = await self._consolidate_ideas(all_ideas, video)
+
         # Filter by confidence threshold from campaign config
         confidence_threshold = self.context.campaign.idea_confidence_threshold
         if confidence_threshold > 0:
@@ -204,8 +209,18 @@ class IdeaExtractionAgent(BaseAgent):
                     continue
                 seen_hashes.add(content_hash)
 
-                # Enrich with quality assessment and categorization
+                # Enrich with quality assessment
                 quality = await self._call_quality_assessment(idea_data, video)
+
+                # Quality gate: skip low-quality ideas before categorization
+                if quality:
+                    if quality.overall_recommendation == "Skip":
+                        logger.info(f"Skipping idea '{idea_data.title}': quality assessment recommends Skip")
+                        continue
+                    if quality.quality_score < 0.4:
+                        logger.info(f"Skipping idea '{idea_data.title}': quality_score {quality.quality_score:.2f} < 0.4")
+                        continue
+
                 categorization = await self._call_idea_categorization(idea_data, video)
 
                 extraction_metadata: Dict[str, Any] = {
@@ -218,7 +233,7 @@ class IdeaExtractionAgent(BaseAgent):
                         "viability_scores": quality.viability_scores,
                         "strengths": quality.strengths,
                         "weaknesses": quality.weaknesses,
-                        "overall_recommendation": quality.recommendations[:1][0] if quality.recommendations else None,
+                        "overall_recommendation": quality.overall_recommendation,
                     }
                 if categorization:
                     extraction_metadata["categorization"] = categorization
@@ -372,6 +387,68 @@ class IdeaExtractionAgent(BaseAgent):
             chunks.append(" ".join(current_words))
 
         return chunks if chunks else [text]
+
+    async def _consolidate_ideas(self, ideas: list, video: Video) -> list:
+        """
+        Call LLM to merge semantically similar ideas and discard vague ones.
+
+        Falls back to the original list if the consolidation call fails.
+        """
+        if not ideas:
+            return ideas
+
+        # Serialize candidate ideas to JSON
+        candidate_json = json.dumps([
+            {
+                "title": i.title,
+                "description": i.description,
+                "category": i.category,
+                "target_market": i.target_market,
+                "value_proposition": i.value_proposition,
+                "complexity_score": i.complexity_score,
+                "confidence": i.confidence,
+                "source_context": i.source_context,
+            }
+            for i in ideas
+        ], indent=2)
+
+        system_prompt, user_prompt = PromptTemplates.get_prompt(
+            PromptType.IDEA_CONSOLIDATION,
+            variables={
+                "video_title": video.title or "Unknown",
+                "candidate_ideas_json": candidate_json,
+            },
+        )
+
+        try:
+            response = await self.llm_manager.generate(
+                prompt=user_prompt,
+                model_type=ModelType.QUALITY,
+                system_prompt=system_prompt or "",
+                temperature=0.2,
+                max_tokens=4000,
+            )
+
+            self.increment_llm_calls(
+                count=1,
+                tokens=response.get("usage", {}).get("total_tokens", 0),
+                cost=float(response.get("cost", 0)),
+            )
+
+            consolidated = ResponseParser.parse_idea_consolidation_response(
+                response.get("content", "")
+            )
+
+            logger.info(
+                f"Consolidation: {len(ideas)} ideas -> {len(consolidated)} ideas "
+                f"for video {video.id}"
+            )
+
+            return consolidated if consolidated else ideas
+
+        except Exception as e:
+            logger.warning(f"Idea consolidation failed, using unmerged ideas: {e}")
+            return ideas
 
     async def _call_quality_assessment(
         self,

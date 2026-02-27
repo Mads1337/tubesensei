@@ -49,6 +49,7 @@ class ParsedQualityAssessment:
     strengths: List[str] = None
     weaknesses: List[str] = None
     recommendations: List[str] = None
+    overall_recommendation: str = "Consider"
     
     def __post_init__(self):
         if self.viability_scores is None:
@@ -256,14 +257,60 @@ class ResponseParser:
         else:
             recommendations = []
         
+        # Parse overall_recommendation (valid: "Pursue", "Consider", "Skip")
+        raw_recommendation = str(result.get("overall_recommendation", "Consider")).strip()
+        if raw_recommendation not in ("Pursue", "Consider", "Skip"):
+            raw_recommendation = "Consider"
+
         return ParsedQualityAssessment(
             quality_score=quality_score,
             viability_scores=viability_scores,
             strengths=strengths,
             weaknesses=weaknesses,
-            recommendations=recommendations
+            recommendations=recommendations,
+            overall_recommendation=raw_recommendation,
         )
     
+    @staticmethod
+    def parse_idea_consolidation_response(response: str) -> List[ParsedIdea]:
+        """Parse idea consolidation AI response into list of ParsedIdea."""
+        result = ResponseParser.parse_json_response(
+            response,
+            required_fields=["consolidated_ideas"]
+        )
+
+        ideas = []
+        for idea_data in result.get("consolidated_ideas", []):
+            try:
+                title = str(idea_data.get("title", "")).strip()[:100]
+                description = str(idea_data.get("description", "")).strip()[:500]
+                category = str(idea_data.get("category", "Other")).strip()[:50]
+                target_market = str(idea_data.get("target_market", "")).strip()[:200]
+                value_proposition = str(idea_data.get("value_proposition", "")).strip()[:300]
+                complexity_score = min(10, max(1, int(idea_data.get("complexity_score", 5))))
+                confidence = min(1.0, max(0.0, float(idea_data.get("confidence", 0.5))))
+                source_context = str(idea_data.get("source_context", "")).strip()[:500]
+
+                idea = ParsedIdea(
+                    title=title,
+                    description=description,
+                    category=category,
+                    target_market=target_market,
+                    value_proposition=value_proposition,
+                    complexity_score=complexity_score,
+                    confidence=confidence,
+                    source_context=source_context,
+                )
+
+                if idea.title and idea.description:
+                    ideas.append(idea)
+
+            except Exception as e:
+                logger.warning(f"Failed to parse consolidated idea: {e}")
+                continue
+
+        return ideas
+
     @staticmethod
     def parse_summary_generation_response(response: str) -> Dict[str, Any]:
         """Parse summary generation AI response."""

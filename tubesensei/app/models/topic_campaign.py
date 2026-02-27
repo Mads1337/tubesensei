@@ -77,7 +77,7 @@ class TopicCampaign(BaseModel):
             "search_limit": 50,
             "similar_videos_depth": 2,
             "filter_threshold": 0.7,
-            "idea_confidence_threshold": 0.5,
+            "idea_confidence_threshold": 0.7,
             "enabled_agents": ["search", "channel_expansion", "topic_filter", "similar_videos"]
         }"""
     )
@@ -299,8 +299,8 @@ class TopicCampaign(BaseModel):
 
     @property
     def idea_confidence_threshold(self) -> float:
-        """Minimum confidence score for idea extraction (default 0.5)."""
-        return self.config.get("idea_confidence_threshold", 0.5)
+        """Minimum confidence score for idea extraction (default 0.7)."""
+        return self.config.get("idea_confidence_threshold", 0.7)
 
     @property
     def enabled_agents(self) -> List[str]:
