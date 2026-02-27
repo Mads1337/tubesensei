@@ -63,11 +63,16 @@
     }
     </style>
 
+    <script>
+      if (localStorage.getItem('darkMode') === 'true') {
+        document.documentElement.classList.add('dark');
+      }
+    </script>
+
     {% block head %}{% endblock %}
 </head>
 <body class="bg-gray-50 dark:bg-gray-900" x-data="{ darkMode: false, sidebarOpen: true, userMenuOpen: false }"
-      x-init="darkMode = localStorage.getItem('darkMode') === 'true'"
-      :class="{ 'dark': darkMode }">
+      x-init="darkMode = localStorage.getItem('darkMode') === 'true'">
 
     <!-- Skip Link for Keyboard Navigation -->
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-primary-600 focus:text-white">
@@ -81,7 +86,7 @@
                 <!-- Left side -->
                 <div class="flex">
                     <!-- Mobile menu button -->
-                    <button @click="sidebarOpen = !sidebarOpen" class="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500">
+                    <button @click="sidebarOpen = !sidebarOpen" class="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500">
                         <i class="fas fa-bars"></i>
                     </button>
                     
@@ -111,11 +116,11 @@
                     <!-- Notifications -->
                     <button class="relative p-1 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
                         <i class="fas fa-bell text-xl"></i>
-                        <span class="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-400 ring-2 ring-white"></span>
+                        <span class="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-400 ring-2 ring-white dark:ring-gray-800"></span>
                     </button>
                     
                     <!-- Dark mode toggle -->
-                    <button @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode)" 
+                    <button @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode); document.documentElement.classList.toggle('dark')"
                             class="p-1 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
                         <i x-show="!darkMode" class="fas fa-moon text-xl"></i>
                         <i x-show="darkMode" class="fas fa-sun text-xl"></i>

@@ -49,6 +49,16 @@
     background-color: #f9fafb;
 }
 
+.dark .btn-secondary {
+    color: #d1d5db;
+    background-color: #374151;
+    border-color: #4b5563;
+}
+
+.dark .btn-secondary:hover {
+    background-color: #4b5563;
+}
+
 /* Form input styles */
 .form-input {
     display: block;
