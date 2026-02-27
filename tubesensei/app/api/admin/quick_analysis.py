@@ -149,7 +149,7 @@ async def analyze_video(
         llm = LLMManager()
         result = await llm.generate(
             prompt=user_prompt,
-            model_type=ModelType.BALANCED,
+            model_type=ModelType.FAST,
             system_prompt=system_prompt or "",
             temperature=0.3,
             max_tokens=4000,
@@ -353,7 +353,7 @@ async def _run_channel_analysis(job_id: str, videos: List[Dict[str, Any]]) -> No
 
             result = await llm.generate(
                 prompt=user_prompt,
-                model_type=ModelType.BALANCED,
+                model_type=ModelType.FAST,
                 system_prompt=system_prompt or "",
                 temperature=0.3,
                 max_tokens=4000,

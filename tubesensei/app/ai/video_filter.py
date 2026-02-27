@@ -48,15 +48,15 @@ class VideoFilter:
     async def filter_video(
         self,
         video: Video,
-        use_fast_model: bool = True
+        use_fast_model: bool = True,
     ) -> Dict[str, Any]:
         """
         Filter a single video using AI analysis.
-        
+
         Args:
             video: Video object to analyze
-            use_fast_model: Use faster/cheaper model for initial filtering
-            
+            use_fast_model: Deprecated, always uses FAST model tier
+
         Returns:
             Filtering result with score and reasoning
         """
@@ -84,7 +84,7 @@ class VideoFilter:
             messages.append({"role": "user", "content": user_prompt})
             
             # Get LLM response
-            model_type = ModelType.FAST if use_fast_model else ModelType.BALANCED
+            model_type = ModelType.FAST
             response = await self.llm_manager.complete(
                 messages=messages,
                 model_type=model_type,

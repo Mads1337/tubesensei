@@ -78,18 +78,16 @@ class LLMManager:
     Unified LLM manager with multi-provider support, fallback, and cost tracking.
     """
     
-    # Model configuration - DeepSeek primary, others as fallback (Feb 2026)
+    # Model configuration - Gemini for fast/balanced, DeepSeek for quality (Feb 2026)
     MODEL_CONFIG: Dict[ModelType, List[str]] = {
         ModelType.FAST: [
             "gemini-2.5-flash-lite",     # Primary - cheapest
-            "deepseek-chat",             # Fast fallback
             "gemini-2.5-flash",          # Google fallback
             "gpt-4.1-mini",             # OpenAI fallback
         ],
         ModelType.BALANCED: [
-            "deepseek-chat",             # Primary
+            "gemini-2.5-flash-lite",     # Primary - fast and cheap
             "gemini-2.5-flash",          # Google fallback
-            "gemini-2.5-flash-lite",     # Cheap fallback
             "gpt-4.1-mini",              # OpenAI fallback
         ],
         ModelType.QUALITY: [
@@ -199,17 +197,17 @@ class LLMManager:
             self.router = Router(
                 model_list=model_list,
                 fallbacks=[
-                    # DeepSeek fallbacks
+                    # DeepSeek fallbacks (used only by quality tier)
                     {"deepseek-chat": ["gemini-2.5-flash-lite", "gemini-2.5-flash"]},
                     {"deepseek-reasoner": ["deepseek-chat", "gemini-2.5-flash"]},
 
                     # Google fallbacks
-                    {"gemini-2.5-flash": ["deepseek-chat", "gpt-4.1-mini"]},
-                    {"gemini-2.5-flash-lite": ["deepseek-chat", "gemini-2.5-flash"]},
-                    {"gemini-2.5-pro": ["deepseek-chat", "gemini-2.5-flash"]},
+                    {"gemini-2.5-flash": ["gemini-2.5-flash-lite", "gpt-4.1-mini"]},
+                    {"gemini-2.5-flash-lite": ["gemini-2.5-flash", "gpt-4.1-mini"]},
+                    {"gemini-2.5-pro": ["gemini-2.5-flash", "gemini-2.5-flash-lite"]},
 
                     # OpenAI fallbacks
-                    {"gpt-4.1-mini": ["deepseek-chat", "gemini-2.5-flash-lite"]},
+                    {"gpt-4.1-mini": ["gemini-2.5-flash-lite", "gemini-2.5-flash"]},
                 ]
             )
             
